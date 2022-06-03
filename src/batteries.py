@@ -95,11 +95,6 @@ class Battery(ABC):
         else:
             if self.soc > self.minsoc: # there is charge in the storage
 
-                # Pcharge = abs(Pnet)
-                # if abs(Pnet) > self.maxdischarge: # too much discharge needed
-                #     Pcharge = self.maxdischarge
-                #     Pex += Pnet + Pcharge
-
                 # Poffer is the total power we can offer
                 Poffer = (self.soc - self.minsoc) * self.etadischarge
                 Pdischarge = None
