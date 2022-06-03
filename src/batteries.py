@@ -27,7 +27,7 @@ class Battery(ABC):
     @classmethod
     def _load_attributes(cls, config):
         print(f'Loading config for {cls.__name__}...')
-        print('\n'.join([f'\t{k}: {v}' for k, v in config.items()]))
+        # print('\n'.join([f'\t{k}: {v}' for k, v in config.items()]))
 
         cls.capex = config['capital_cost']
         cls.opex = config['operating_cost']
@@ -63,12 +63,16 @@ class Battery(ABC):
             Pex export power that remains after charging (in kW). If
             negative, we need to pick up more energy.'''
 
-        if Pnet == 0: # no power, don't do anything
+        # self-discharge (always happens)
+        self.soc = (1 - self.selfdischarge) * self.soc
+
+        # if there is no net power, don't do anything
+        if Pnet == 0:
             return Pnet
 
         Pex = 0
-
-        if Pnet > 0: # we generated more power, we will charge
+        # if we generated net power, try to charge
+        if Pnet > 0:
 
             Pcharge = Pnet
             if Pnet > self.maxcharge: # too much charging
@@ -76,41 +80,53 @@ class Battery(ABC):
                 Pex += Pnet - Pcharge
 
             energy_plus = Pcharge * self.etacharge
-            discharge_minus = self.selfdischarge * self.soc
 
             # if we would overcharge
-            if self.soc + energy_plus - discharge_minus > self.capacity:
-                used = self.capacity - (self.soc - discharge_minus)
-                self.soc = self.capacity # only charge until full
-                Pex += (energy_plus - used) / self.etacharge
-            else: # we would not overcharge
-                # just charge
-                self.soc = self.soc + energy_plus - discharge_minus
-            
-        else: # we need power, we will discharge
+            if self.soc + energy_plus > self.maxsoc:
+                # charge until full
+                self.soc = self.maxsoc
+                # export remaining power
+                Pex += (energy_plus - self.maxsoc - self.soc) / self.etacharge
+            # if we would not overcharge
+            else:
+                self.soc += energy_plus
+
+        # we need power, we will discharge
+        else:
             if self.soc > self.minsoc: # there is charge in the storage
-                # self-discharge
-                selfdisc = self.soc * self.selfdischarge
-                self.soc -= selfdisc
 
-                Pcharge = abs(Pnet)
-                if abs(Pnet) > self.maxdischarge: # too much discharge needed
-                    Pcharge = self.maxdischarge
-                    Pex += Pnet + Pcharge
+                # Pcharge = abs(Pnet)
+                # if abs(Pnet) > self.maxdischarge: # too much discharge needed
+                #     Pcharge = self.maxdischarge
+                #     Pex += Pnet + Pcharge
 
-                to_discharge = Pcharge * self.etadischarge
-                # too much discharge needed
-                if self.soc - to_discharge < self.minsoc:
-                    need = to_discharge - (self.soc - self.minsoc)
-                    self.soc = self.minsoc
-                    Pex -= need / self.etadischarge
-                    
-                else: # enough energy
-                    self.soc -= to_discharge
+                # Poffer is the total power we can offer
+                Poffer = (self.soc - self.minsoc) * self.etadischarge
+                Pdischarge = None
 
-            else: # no charge in the storage
+                # if we need more power than we can offer
+                if abs(Pnet) > Poffer:
+                    # discharge whole battery
+                    Pdischarge = self.soc - self.minsoc
+
+                # if we can satisfy the needs with discharging
+                else:
+                    # discharge enough for Pnet
+                    Pdischarge = abs(Pnet) / self.etadischarge
+
+                # check the if discharge exceeds the max discharge rate
+                if Pdischarge > self.maxdischarge:
+                    Pdischarge = self.maxdischarge
+                # discharge
+                self.soc -= Pdischarge
+                Pex = Pnet + Pdischarge * self.etadischarge
+
+            # no charge in the storage
+            else:
                 Pex += Pnet
 
+        if abs(Pex) < 1e-8:
+            Pex = 0
         return Pex
 
 class LiIonBattery(Battery):
@@ -136,5 +152,6 @@ Supercapacitor._load_attributes(CONFIG['Supercapacitor'])
 
 if __name__ == '__main__':
     a = LiIonBattery()
-    b = Supercapacitor()
-    c = Flywheel()
+    print(a.soc)
+    Pex = a.step(1000)
+    print(Pex, a.soc)
