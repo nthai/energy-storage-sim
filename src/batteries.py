@@ -26,7 +26,7 @@ class Battery(ABC):
 
     @classmethod
     def _load_attributes(cls, config):
-        print(f'Loading config for {cls.__name__}...')
+        print(f'{os.path.basename(__file__)}: Loading config for {cls.__name__}...')
         # print('\n'.join([f'\t{k}: {v}' for k, v in config.items()]))
 
         cls.capex = config['capital_cost']
@@ -150,8 +150,46 @@ LiIonBattery._load_attributes(CONFIG['LiIonBattery'])
 Flywheel._load_attributes(CONFIG['Flywheel'])
 Supercapacitor._load_attributes(CONFIG['Supercapacitor'])
 
+class EnergyHub:
+    def __init__(self, config: dict) -> None:
+        '''Initialize energy storage hub containing multiple batteries.
+        params:
+            - config: dict containing the following keys:
+              {`LiIonBattery`, `Flywheel`, `Supercapacitor`}'''
+        
+        print(f'{os.path.basename(__file__)}: EnergyHub initialized with config: {config}')
+
+        self.liion_cnt = config['LiIonBattery']
+        self.flywh_cnt = config['Flywheel']
+        self.sucap_cnt = config['Supercapacitor']
+        self.storages = [] # type: list[Battery]
+
+        for _ in range(self.sucap_cnt):
+            self.storages.append(Supercapacitor())
+        for _ in range(self.flywh_cnt):
+            self.storages.append(Flywheel())
+        for _ in range(self.liion_cnt):
+            self.storages.append(LiIonBattery())
+    
+    def step(self, Pnet: float) -> float:
+        '''Makes a 1-hour simulation step on the batteries. Batteries should
+        be ordered according to a priority level. Currently the order is
+        supercapacitors > flywheels > Li-ion batteries.
+        params:
+            - Pnet: net power in kW
+        returns:
+            Pex export power. If positive, we export the power, if negative,
+            we take from the grid.
+        '''
+        for battery in self.storages:
+            Pnet = battery.step(Pnet)
+            if Pnet == 0:
+                break
+        return Pnet
+
+def test():
+    #TODO
+    pass
+
 if __name__ == '__main__':
-    a = LiIonBattery()
-    print(a.soc)
-    Pex = a.step(1000)
-    print(Pex, a.soc)
+    test()
