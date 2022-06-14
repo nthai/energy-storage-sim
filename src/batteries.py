@@ -80,13 +80,18 @@ class Battery(ABC):
                 Pex += Pnet - Pcharge
 
             energy_plus = Pcharge * self.etacharge
+            # energy_plus = Pcharge
 
             # if we would overcharge
             if self.soc + energy_plus > self.maxsoc:
+                # Pdiff = energy_plus + self.soc - self.maxsoc
+
                 # charge until full
                 self.soc = self.maxsoc
                 # export remaining power
-                Pex += (energy_plus - self.maxsoc - self.soc) / self.etacharge
+                Pex += (energy_plus - self.maxsoc + self.soc) / self.etacharge
+
+                # Pex += Pdiff
             # if we would not overcharge
             else:
                 self.soc += energy_plus
