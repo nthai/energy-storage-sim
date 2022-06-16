@@ -8,6 +8,7 @@ LiIonBattery:
   charge_efficiency:         .90   #
   discharge_efficiency:      .90   #
   self_discharge_rate:       .02   # 2-5%/month (!!! MONTH !!!)
+  unit_maintenance_cost:     1     # TODO: ?
 
 Flywheel:
   capital_cost:              1800  # (USD/kWh)
@@ -19,6 +20,7 @@ Flywheel:
   charge_efficiency:         .90   #
   discharge_efficiency:      .90   #
   self_discharge_rate:       .001  # 0.1-1%/hour
+  unit_maintenance_cost:     1     # TODO: ?
 
 Supercapacitor:
   capital_cost:              900   # (USD/kWh)
@@ -30,3 +32,4 @@ Supercapacitor:
   charge_efficiency:         .92   #
   discharge_efficiency:      .95   #
   self_discharge_rate:       .04   # %/hour
+  unit_maintenance_cost:     1     # TODO: ?

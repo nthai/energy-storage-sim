@@ -38,6 +38,7 @@ class Battery(ABC):
         cls.etacharge = config['charge_efficiency']
         cls.etadischarge = config['discharge_efficiency']
         cls.selfdischarge = config['self_discharge_rate']
+        cls.unitmaintenance = config['unit_maintenance_cost']
         cls.minsoc = 0
         cls.maxsoc = cls.capacity
 
@@ -129,6 +130,18 @@ class Battery(ABC):
             Pex = 0
         return Pex
 
+    def get_capex(self, t):
+        '''Get capital expenses for the battery using the formula:
+            PrEHC / ELF * C * T
+        '''
+        return self.capex / self.lifetime * self.capacity * t
+
+    def get_opex(self, t):
+        '''Get operational expenses for the battery using the formula:
+            PrEHO / UMC * C * T
+        '''
+        return self.opex / self.unitmaintenance * self.capacity * t
+
 class LiIonBattery(Battery):
     def __init__(self) -> None:
         super().__init__()
@@ -186,6 +199,12 @@ class EnergyHub:
             if Pnet == 0:
                 break
         return Pnet
+
+    def get_capex(self, t):
+        return sum([battery.get_capex() for battery in self.storages])
+
+    def get_opex(self, t):
+        return sum([battery.get_opex() for battery in self.storages])
 
 def test():
     #TODO
