@@ -33,6 +33,7 @@ def objective(data: pd.DataFrame, timelimit, c1: int, c2: int, c3: int) -> float
         time = datetime.strptime(time, '%m%d%Y %H:%M')
         delta = time - start_time
         timeperiod = delta.days * 24 + delta.seconds / 60 / 60
+
         if timeperiod > timelimit:
             timeperiod = timelimit
             break
@@ -53,7 +54,8 @@ def objective(data: pd.DataFrame, timelimit, c1: int, c2: int, c3: int) -> float
 
 def main():
     df = pd.read_csv('../data/short.csv')
-    objective(df, 100, 3, 3, 3)
+    cost = objective(df, float('inf'), 3, 3, 3)
+    print(f'total cost: {cost}')
 
 if __name__ == '__main__':
     main()

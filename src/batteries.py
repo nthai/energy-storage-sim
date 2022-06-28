@@ -56,10 +56,11 @@ class Battery(ABC):
         # operational cost in USD/hour
         cls.opex = cls.opex * cls.capacity / 365 / 24
     
-    def step(self, Pnet):
+    def step(self, Pnet, tstep=1):
         '''Compute next state of charge. Steps 1 hour forward.
         params:
             - Pnet: net power (in kW) that is used to charge this battery
+            - tstep: timestep in hour. Default is 1 hour. # TODO: not implemented yet
         returns:
             Pex export power that remains after charging (in kW). If
             negative, we need to pick up more energy.'''
@@ -134,13 +135,13 @@ class Battery(ABC):
         '''Get capital expenses for the battery using the formula:
             PrEHC / ELF * C * T
         '''
-        return self.capex / self.lifetime * self.capacity * t
+        return self.capex / self.lifetime * t
 
     def get_opex(self, t):
         '''Get operational expenses for the battery using the formula:
             PrEHO / UMC * C * T
         '''
-        return self.opex / self.unitmaintenance * self.capacity * t
+        return self.opex / self.unitmaintenance * t
 
 class LiIonBattery(Battery):
     def __init__(self) -> None:
@@ -201,10 +202,10 @@ class EnergyHub:
         return Pnet
 
     def get_capex(self, t):
-        return sum([battery.get_capex() for battery in self.storages])
+        return sum([battery.get_capex(t) for battery in self.storages])
 
     def get_opex(self, t):
-        return sum([battery.get_opex() for battery in self.storages])
+        return sum([battery.get_opex(t) for battery in self.storages])
 
 def test():
     #TODO
