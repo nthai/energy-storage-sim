@@ -22,7 +22,7 @@ def objective(data: pd.DataFrame, timelimit, c1: int, c2: int, c3: int) -> float
 
     start_time = None
     timeperiod = 0
-    total_cost = 0
+    energy_cost = 0
 
     for _, row in data.iterrows():
         time, pv, load, pbuy = row
@@ -41,14 +41,19 @@ def objective(data: pd.DataFrame, timelimit, c1: int, c2: int, c3: int) -> float
         pnet = pv - load
         pnet = ehub.step(pnet)
         if pnet > 0:
-            total_cost -= pnet * psell
+            energy_cost -= pnet * psell
         else:
-            total_cost += abs(pnet) * pbuy
-    total_cost /= 100
+            energy_cost += abs(pnet) * pbuy
+    energy_cost /= 100
 
     capex = ehub.get_capex(timeperiod)
     opex = ehub.get_opex(timeperiod)
-    total_cost += capex + opex
+    total_cost = energy_cost + capex + opex
+
+    print(f'Time period: {timeperiod}, ' +
+          f'Total cost: {total_cost}, ' +
+          f'Energy cost: {energy_cost:.2f}, ' +
+          f'Capex: {capex:.2f}, Opex: {opex:.2f}')
 
     return total_cost
 
