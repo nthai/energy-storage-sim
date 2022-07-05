@@ -57,7 +57,7 @@ class Battery(ABC):
         cls.opex = cls.opex * cls.capacity / 365 / 24
     
     def step(self, Pnet, tstep=1):
-        '''Compute next state of charge. Steps 1 hour forward.
+        '''Compute next state of charge. Steps 1 hour forward. Greedy algorithm.
         params:
             - Pnet: net power (in kW) that is used to charge this battery
             - tstep: timestep in hour. Default is 1 hour. # TODO: not implemented yet
@@ -178,6 +178,9 @@ class EnergyHub:
         self.sucap_cnt = config['Supercapacitor']
         self.storages = [] # type: list[Battery]
 
+        self._init_batteries()
+
+    def _init_batteries(self):
         for _ in range(self.sucap_cnt):
             self.storages.append(Supercapacitor())
         for _ in range(self.flywh_cnt):
