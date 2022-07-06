@@ -1,12 +1,22 @@
 from batteries import Battery, EnergyHub
 from batteries import CONFIG
 
+
+def chop(val, to=0, delta=1e-10):
+    if to - delta <= val <= to + delta:
+        return to
+    else:
+        return val
+
 class PeakShaveBattery(Battery):
     def __init__(self) -> None:
         super().__init__()
 
     def step(self, pdemand):
-        pass
+        raise NotImplementedError("This class does not implement the step function!")
+
+    def reset(self):
+        self.soc = 0
 
     def get_soc(self):
         return self.soc
@@ -15,7 +25,9 @@ class PeakShaveBattery(Battery):
         return self.maxsoc
     
     def _selfdischarge(self):
-        self.soc = (1 - self.selfdischarge) * self.soc
+        sdcharge = self.selfdischarge * self.soc
+        self.soc = self.soc - sdcharge
+        return sdcharge
 
     def charge(self, pdemand, tdelta=1):
         '''Use pdemand (or a portion of it) to charge the battery.
@@ -24,12 +36,16 @@ class PeakShaveBattery(Battery):
             - tdelta: the time period during which pdemand is applied to the battery (in h)
         Returns:
             - pcharge: the power that is ultimately used on the battery
-            - premain: the remaining power, `pdemand - pcharge`'''
+            - premain: the remaining power, `pdemand - pcharge`
+            - sdcharge: the amount of self-discharge'''
 
-        assert pdemand > 0
+        assert pdemand >= 0
 
         # self-discharge always happens
-        self._selfdischarge()
+        sdcharge = self._selfdischarge()
+
+        if pdemand == 0:
+            return 0, 0, sdcharge
 
         # check if pdemand exceeds the max charging power
         pcharge = min(self.maxcharge, pdemand)
@@ -44,7 +60,7 @@ class PeakShaveBattery(Battery):
 
         # 
         premain = pdemand - pcharge
-        return pcharge, premain
+        return pcharge, premain, sdcharge
 
     def discharge(self, pdemand, tdelta=1):
         '''Try to discharge pdemand of power from the battery.
@@ -54,21 +70,26 @@ class PeakShaveBattery(Battery):
         Returns:
             - pdischarge: power used to discharge the battery (in kW)
             - premain: remaining power, `pdemand - pdischarge`
+            - sdcharge: the amount of self-discharge
         '''
-        assert pdemand > 0
+        assert pdemand >= 0
 
         # self-discharge always happens
-        self._selfdischarge()
+        sdcharge = self._selfdischarge()
+
+        if pdemand == 0:
+            return 0, 0, sdcharge
 
         pdischarge = min(pdemand, self.maxdischarge)
 
         if self.soc - self.etadischarge * (pdischarge * tdelta) < self.minsoc:
             pdischarge = (self.soc - self.minsoc) / self.etadischarge / tdelta
         self.soc = self.soc - self.etadischarge * (pdischarge * tdelta)
+        self.soc = chop(self.soc)
         assert self.soc >= self.minsoc
 
         premain = pdemand - pdischarge
-        return pdischarge, premain
+        return pdischarge, premain, sdcharge
 
 class PeakShaveLiIonBattery(PeakShaveBattery):
     def __init__(self) -> None:
@@ -92,4 +113,40 @@ PeakShaveFlywheel._load_attributes(CONFIG['Flywheel'])
 PeakShaveSupercapacitor._load_attributes(CONFIG['Supercapacitor'])
 
 class PeakShaveEnergyHub(EnergyHub):
-    pass # TODO
+    def _init_batteries(self):
+        for _ in range(self.sucap_cnt):
+            self.storages.append(PeakShaveSupercapacitor())
+        for _ in range(self.flywh_cnt):
+            self.storages.append(PeakShaveFlywheel())
+        for _ in range(self.liion_cnt):
+            self.storages.append(PeakShaveLiIonBattery())
+    
+    def charge(self, pdemand, tdelta=1):
+        total_charge = 0
+        total_selfdischarge = 0
+        for battery in self.storages:
+            pcharge, pdemand, sdcharge = battery.charge(pdemand, tdelta)
+            total_charge += pcharge
+            total_selfdischarge += sdcharge
+        return total_charge, total_selfdischarge
+
+    def discharge(self, pdemand, tdelta=1):
+        total_discharge = 0
+        total_selfdischarge = 0
+        for battery in self.storages:
+            pdischarge, pdemand, sdcharge = battery.discharge(pdemand, tdelta)
+            total_discharge += pdischarge
+            total_selfdischarge += sdcharge
+        return total_discharge, total_selfdischarge
+
+    def get_soc(self):
+        '''Returns the total state-of-charge of all batteries (in kWh).'''
+        return sum([battery.get_soc() for battery in self.storages])
+    
+    def get_maxsoc(self):
+        '''Returns the total maximum state-of-charge of all batteries (in kWh).'''
+        return sum([Battery.get_maxsoc() for battery in self.storages])
+
+    def reset(self):
+        for battery in self.storages:
+            battery.reset()
