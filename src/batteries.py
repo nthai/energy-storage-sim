@@ -3,8 +3,8 @@ import os
 import yaml
 
 CONFIG = None
-# CONFFILE = 'batteries.yaml'
-CONFFILE = '/home/nthai/codes/github/ml/energy-storage-sim/src/batteries.yaml'
+CONFFILE = 'batteries.yaml'
+
 print(f'{os.path.basename(__file__)}: loading battery config from {CONFFILE}...')
 with open(CONFFILE) as configfile:
     CONFIG = yaml.safe_load(configfile)

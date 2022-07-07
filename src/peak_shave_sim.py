@@ -2,8 +2,7 @@ import gym
 import pandas as pd
 from peak_shave_battery import PeakShaveEnergyHub
 
-# FILENAME = '../data/short.csv'
-FILENAME = '/home/nthai/codes/github/ml/energy-storage-sim/data/short.csv'
+FILENAME = '../data/short.csv'
 
 class PeakShaveEnv(gym.Env):
     def __init__(self, config) -> None:
