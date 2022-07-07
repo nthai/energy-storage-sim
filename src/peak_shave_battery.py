@@ -29,6 +29,10 @@ class PeakShaveBattery(Battery):
         self.soc = self.soc - sdcharge
         return sdcharge
 
+    def do_nothing(self, tdelta=1):
+        sdcharge = self._selfdischarge()
+        return 0, 0, sdcharge
+
     def charge(self, pdemand, tdelta=1):
         '''Use pdemand (or a portion of it) to charge the battery.
         Args:
@@ -128,6 +132,7 @@ class PeakShaveEnergyHub(EnergyHub):
             pcharge, pdemand, sdcharge = battery.charge(pdemand, tdelta)
             total_charge += pcharge
             total_selfdischarge += sdcharge
+
         return total_charge, total_selfdischarge
 
     def discharge(self, pdemand, tdelta=1):
@@ -139,13 +144,20 @@ class PeakShaveEnergyHub(EnergyHub):
             total_selfdischarge += sdcharge
         return total_discharge, total_selfdischarge
 
+    def do_nothing(self):
+        total_selfdischarge = 0
+        for battery in self.storages:
+            _, _, sdcharge = battery.do_nothing()
+            total_selfdischarge += sdcharge
+        return 0, 0, total_selfdischarge
+
     def get_soc(self):
         '''Returns the total state-of-charge of all batteries (in kWh).'''
         return sum([battery.get_soc() for battery in self.storages])
     
     def get_maxsoc(self):
         '''Returns the total maximum state-of-charge of all batteries (in kWh).'''
-        return sum([Battery.get_maxsoc() for battery in self.storages])
+        return sum([battery.get_maxsoc() for battery in self.storages])
 
     def reset(self):
         for battery in self.storages:
