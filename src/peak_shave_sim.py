@@ -2,7 +2,8 @@ import gym
 import pandas as pd
 from peak_shave_battery import PeakShaveEnergyHub
 
-FILENAME = '../data/short.csv'
+# FILENAME = '../data/short.csv'
+FILENAME = '../data/full.csv'
 
 class PeakShaveEnv(gym.Env):
     def __init__(self, config) -> None:
@@ -108,16 +109,34 @@ class PeakShaveEnv(gym.Env):
         return state, reward, done, infos
 
 class PeakShaveSim:
-    def __init__(self, config):
+    def __init__(self, config, df=None):
         self.env = PeakShaveEnv(config)
-        self.df = self._read_df(config['filename'])
-        
+        self.df = self._read_df(config['filename']) if df is None else df
+
     def _read_df(self, fname: str) -> pd.DataFrame:
         df = pd.read_csv(fname)
         df['timestamp'] = pd.to_datetime(df['timestamp'],
                                          format='%m%d%Y %H:%M')
         df['net'] = df['Load (kWh)'] - df['PV (kWh)']
         return df
+
+    def set_median_limits(self, margin=0.05):
+        pmedian = self.df['net'].median()
+        self.env.upperlim = pmedian * (1 + margin)
+        self.env.lowerlim = pmedian * (1 - margin)
+        if __debug__:
+            print(f'Median net power: {pmedian}, ' +
+                  f'Lower limit: {self.env.lowerlim}, ' + 
+                  f'Upper limit: {self.env.upperlim}')
+
+    def set_mean_limits(self, margin=0.05):
+        pmean = self.df['net'].mean()
+        self.env.upperlim = pmean * (1 + margin)
+        self.env.lowerlim = pmean * (1 - margin)
+        if __debug__:
+            print(f'mean net power: {pmean}, ' +
+                  f'Lower limit: {self.env.lowerlim}, ' + 
+                  f'Upper limit: {self.env.upperlim}')
 
     def run(self):
         total_costs = 0
@@ -126,21 +145,35 @@ class PeakShaveSim:
             price = datarow['price (cents/kWh)']
             _, reward, _, _ = self.env.step(0, pnet, price)
             total_costs += -reward
-        print(f'Total Cost: {total_costs}')
+        return total_costs
 
-def main():
+def peak_shave_objective(df: pd.DataFrame, liion_cnt: int, flywh_cnt: int,
+                         sucap_cnt: int, margin: float) -> float:
+
+    mean_demand = df['net'].mean()
+    upperlim = mean_demand * (1 + margin)
+    lowerlim = mean_demand * (1 - margin)
+
     config = {
         'filename': FILENAME,
-        'Plim_upper': 2500,
-        'Plim_lower': 1000,
+        'Plim_upper': upperlim,
+        'Plim_lower': lowerlim,
         'delta_limit': 1,
-        'LiIonBattery': 3,
-        'Flywheel': 3,
-        'Supercapacitor': 3
+        'LiIonBattery': liion_cnt,
+        'Flywheel': flywh_cnt,
+        'Supercapacitor': sucap_cnt
     }
+    sim = PeakShaveSim(config, df)
+    total_costs = sim.run()
+    return total_costs
 
-    sim = PeakShaveSim(config)
-    sim.run()
+def main():
+    df = pd.read_csv(FILENAME)
+    df['timestamp'] = pd.to_datetime(df['timestamp'],
+                                        format='%m%d%Y %H:%M')
+    df['net'] = df['Load (kWh)'] - df['PV (kWh)']
+    total_costs = peak_shave_objective(df, 3, 3, 3, .2)
+    print(total_costs)
 
 if __name__ == '__main__':
     main()
