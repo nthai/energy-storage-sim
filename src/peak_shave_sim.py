@@ -2,8 +2,8 @@ import gym
 import pandas as pd
 from peak_shave_battery import PeakShaveEnergyHub
 
-# FILENAME = '../data/short.csv'
-FILENAME = '../data/full.csv'
+FILENAME = '../data/short.csv'
+# FILENAME = '../data/full.csv'
 
 class PeakShaveEnv(gym.Env):
     def __init__(self, config) -> None:
@@ -11,8 +11,8 @@ class PeakShaveEnv(gym.Env):
 
         # self.df = self._read_df(config['filename'])
         self.limdelta = config['delta_limit']
-        self.upperlim = config['Plim_upper']
-        self.lowerlim = config['Plim_lower']
+        self.upperlim = 3000
+        self.lowerlim = 1000
         self.ehub = PeakShaveEnergyHub(config)
 
         if self.upperlim < self.lowerlim:
@@ -22,16 +22,11 @@ class PeakShaveEnv(gym.Env):
         self.reset()
 
     def reset(self):
-        # self.timestep = 0
-        # self.maxtime = len(self.df)
         self.ehub.reset()
 
-    # def _read_df(self, fname: str) -> pd.DataFrame:
-    #     df = pd.read_csv(fname)
-    #     df['timestamp'] = pd.to_datetime(df['timestamp'],
-    #                                      format='%m%d%Y %H:%M')
-    #     df['net'] = df['Load (kWh)'] - df['PV (kWh)']
-    #     return df
+    def set_limits(self, lower, upper):
+        self.upperlim = upper
+        self.lowerlim = lower
 
     def get_available_actions(self):
         '''Possible actions:
@@ -138,41 +133,80 @@ class PeakShaveSim:
                   f'Lower limit: {self.env.lowerlim}, ' + 
                   f'Upper limit: {self.env.upperlim}')
 
-    def run(self):
+    def run_const_limits(self, lowerlim, upperlim):
         total_costs = 0
+        self.env.set_limits(lowerlim, upperlim)
         for _, datarow in self.df.iterrows():
             pnet = datarow['net']
             price = datarow['price (cents/kWh)']
             _, reward, _, _ = self.env.step(0, pnet, price)
             total_costs += -reward
         return total_costs
+    
+    def run_dynamic_limits(self, lookahead=4, margin=.05):
+        total_costs = 0
+        for idx, datarow in self.df.iterrows():
+            pmedian = self.df.iloc[idx:idx+lookahead]['net'].median()
+            lowerlim = pmedian * (1 - margin)
+            upperlim = pmedian * (1 + margin)
+            self.env.set_limits(lowerlim, upperlim)
 
-def peak_shave_objective(df: pd.DataFrame, liion_cnt: int, flywh_cnt: int,
-                         sucap_cnt: int, margin: float) -> float:
+            pnet = datarow['net']
+            price = datarow['price (cents/kWh)']
+            _, reward, _, _ = self.env.step(0, pnet, price)
+            total_costs += -reward
 
+        return total_costs
+
+def pkshave_constlims_objective(df: pd.DataFrame, liion_cnt: int, flywh_cnt: int,
+                                sucap_cnt: int, margin: float) -> float:
+    '''Objective for the peak-shave optimization problem. Upper and lower limits are
+    set once at the start of the algorithm.
+    Args:
+        - df: pandas.DataFrame containing the price data under the 'net' key.
+        - liion_cnt: number of LiIon batteries
+        - flywh_cnt: number of flywheel batteries
+        - sucap_cnt: number of supercapacitors
+        - margin: determines the size of margin of the upper and lower limits from
+          from the mean, i.e., (upperlim - mean) == (mean - lowerlim) == margin
+    Returns:
+        - total_costs: amount spent on buying electricity from the grid.
+    '''
     mean_demand = df['net'].mean()
     upperlim = mean_demand * (1 + margin)
     lowerlim = mean_demand * (1 - margin)
 
     config = {
         'filename': FILENAME,
-        'Plim_upper': upperlim,
-        'Plim_lower': lowerlim,
         'delta_limit': 1,
         'LiIonBattery': liion_cnt,
         'Flywheel': flywh_cnt,
         'Supercapacitor': sucap_cnt
     }
     sim = PeakShaveSim(config, df)
-    total_costs = sim.run()
+    total_costs = sim.run_const_limits(lowerlim, upperlim)
+    return total_costs
+
+def pkshave_dinlims_objective(df: pd.DataFrame, liion_cnt: int, flywh_cnt: int,
+                              sucap_cnt: int, lookahead: int, margin: float) -> float:
+
+    config = {
+        'filename': FILENAME,
+        'delta_limit': 1,
+        'LiIonBattery': liion_cnt,
+        'Flywheel': flywh_cnt,
+        'Supercapacitor': sucap_cnt
+    }
+    sim = PeakShaveSim(config, df)
+    total_costs = sim.run_dynamic_limits(lookahead, margin)
     return total_costs
 
 def main():
     df = pd.read_csv(FILENAME)
     df['timestamp'] = pd.to_datetime(df['timestamp'],
-                                        format='%m%d%Y %H:%M')
+                                     format='%m%d%Y %H:%M')
     df['net'] = df['Load (kWh)'] - df['PV (kWh)']
-    total_costs = peak_shave_objective(df, 3, 3, 3, .2)
+    total_costs = pkshave_constlims_objective(df, 3, 3, 3, .2)
     print(total_costs)
 
 if __name__ == '__main__':
