@@ -6,10 +6,9 @@ FILENAME = '../data/short.csv'
 # FILENAME = '../data/full.csv'
 
 class PeakShaveEnv(gym.Env):
-    def __init__(self, config) -> None:
+    def __init__(self, config: dict) -> None:
         super().__init__()
 
-        # self.df = self._read_df(config['filename'])
         self.limdelta = config['delta_limit']
         self.upperlim = 3000
         self.lowerlim = 1000
@@ -22,13 +21,15 @@ class PeakShaveEnv(gym.Env):
         self.reset()
 
     def reset(self):
+        '''Resets the state-of-charge in all batteries.'''
         self.ehub.reset()
 
-    def set_limits(self, lower, upper):
+    def set_limits(self, lower: float, upper: float):
+        '''Set upper and lower limits for peak-shaving.'''
         self.upperlim = upper
         self.lowerlim = lower
 
-    def get_available_actions(self):
+    def get_available_actions(self) -> list[int]:
         '''Possible actions:
             - 0: do nothing
             - 1: dec. lower, dec. upper
@@ -48,7 +49,20 @@ class PeakShaveEnv(gym.Env):
 
         return availables
 
-    def step(self, action, pnet, price):
+    def step(self, action: int, pnet: float, price: float):
+        '''Makes a simulation step by charging/discharging the batteries based on the
+        net power demand and calculates the cost paid for the energy taken from the
+        grid.
+        Args:
+            - action: not implemented yet # TODO
+            - pnet: net power demand for the next time period (in kW)
+            - price: price of electricity in the next time period (in cents/kWh)
+        Returns:
+            - state: not implemented yet # TODO
+            - reward: total cost in cents to pay to the grid (negative value)
+            - done: end of episode (always False)
+            - infos: extra info dictionary
+        '''
         state = None
         reward = None
         done = False
@@ -105,6 +119,18 @@ class PeakShaveEnv(gym.Env):
 
 class PeakShaveSim:
     def __init__(self, config, df=None):
+        '''Creates a PeakShaveEnv environment for the simulation.
+        Args:
+            - config: dictionary containing the initializarion parameters
+                - `filename`: name of the file containin the data. Necessary if no df
+                    is provided through the constructor.
+                - `delta_limit`: the amoun of power with which we can change the
+                    upper or lower limit (in kW).
+                - `LiIonBattery`: number of Li-Ion batteries.
+                - `Flywheel`: number of flywheels.
+                - `Supercapacitor`: number of supercapacitors.
+            - df: pandas.DataFrame containing the net load and price data.
+        '''
         self.env = PeakShaveEnv(config)
         self.df = self._read_df(config['filename']) if df is None else df
 
@@ -116,6 +142,10 @@ class PeakShaveSim:
         return df
 
     def set_median_limits(self, margin=0.05):
+        '''Sets the upper and lower limits around the median of the full dataset.
+        Args:
+            - margin: distance of the upper and lower limit from the median in %
+        '''
         pmedian = self.df['net'].median()
         self.env.upperlim = pmedian * (1 + margin)
         self.env.lowerlim = pmedian * (1 - margin)
@@ -125,6 +155,10 @@ class PeakShaveSim:
                   f'Upper limit: {self.env.upperlim}')
 
     def set_mean_limits(self, margin=0.05):
+        '''Sets the upper and lower limits around the mean of the full dataset.
+        Args:
+            - margin: distance of the upper and lower limit from the mean in %
+        '''
         pmean = self.df['net'].mean()
         self.env.upperlim = pmean * (1 + margin)
         self.env.lowerlim = pmean * (1 - margin)
@@ -134,6 +168,13 @@ class PeakShaveSim:
                   f'Upper limit: {self.env.upperlim}')
 
     def run_const_limits(self, lowerlim, upperlim):
+        '''Runs the simulation with constant upper and lower limits.
+        Args:
+            - lowerlim: lower limit for the peak-shaving.
+            - upperlim: upper limit for the peak-shaving.
+        Returns:
+            - total_costs: total cost accumulated during the simulation.
+        '''
         total_costs = 0
         self.env.set_limits(lowerlim, upperlim)
         for _, datarow in self.df.iterrows():
@@ -144,6 +185,14 @@ class PeakShaveSim:
         return total_costs
     
     def run_dynamic_limits(self, lookahead=4, margin=.05):
+        '''Runs a simulation where the upper and lower limits for peak-shaving changes
+        dynamically based on the median of future net power demand values.
+        Args:
+            - lookahead: the amount of future power values considered for the median.
+            - margin: distance of upper and lower limits from the median.
+        Returns:
+            - total_costs: total cost accumulated during simulation.
+        '''
         total_costs = 0
         for idx, datarow in self.df.iterrows():
             pmedian = self.df.iloc[idx:idx+lookahead]['net'].median()
@@ -163,7 +212,8 @@ def pkshave_constlims_objective(df: pd.DataFrame, liion_cnt: int, flywh_cnt: int
     '''Objective for the peak-shave optimization problem. Upper and lower limits are
     set once at the start of the algorithm.
     Args:
-        - df: pandas.DataFrame containing the price data under the 'net' key.
+        - df: pandas.DataFrame containing the price data and the net power under
+            the 'net' key.
         - liion_cnt: number of LiIon batteries
         - flywh_cnt: number of flywheel batteries
         - sucap_cnt: number of supercapacitors
@@ -189,7 +239,20 @@ def pkshave_constlims_objective(df: pd.DataFrame, liion_cnt: int, flywh_cnt: int
 
 def pkshave_dinlims_objective(df: pd.DataFrame, liion_cnt: int, flywh_cnt: int,
                               sucap_cnt: int, lookahead: int, margin: float) -> float:
-
+    '''Objective for the peak-shave optimization problem. Upper and lower limits
+    change dynamically during the run.
+    Args:
+        - df: pandas.DataFrame containing the price data and the net power data
+            under the `net` key.
+        - liion_cnt: number of LiIon batteries
+        - flywh_cnt: number of flywheel batteries
+        - sucap_cnt: number of supercapacitors
+        - lookahead: number of future values to consider for the median
+        - margin: determines the size of margin of the upper and lower limits from
+          from the mean, i.e., (upperlim - mean) == (mean - lowerlim) == margin
+    Returns:
+        - total_costs: amount spent on buying electricity from the grid.
+    '''
     config = {
         'filename': FILENAME,
         'delta_limit': 1,

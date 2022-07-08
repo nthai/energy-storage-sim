@@ -10,6 +10,8 @@ DF['timestamp'] = pd.to_datetime(DF['timestamp'],
 DF['net'] = DF['Load (kWh)'] - DF['PV (kWh)']
 
 def fitness_const(sol, sol_idx):
+    '''Fitness function for the genetic algorithm to optimize for constant upper and
+    lower limit in the peak-shaving algorithm.'''
     liion_cnt = sol[0]
     flywh_cnt = sol[1]
     sucap_cnt = sol[2]
@@ -18,6 +20,9 @@ def fitness_const(sol, sol_idx):
     return 10000000/cost
 
 def fitness_dynamic(sol, sol_idx):
+    '''Fitness function for the genetic algorithm to optimize for dynamically
+    changing upper and lower limits for the peak-shaving algorithm. Limits change
+    according to the median of future net power demand values.'''
     liion_cnt = sol[0]
     flywh_cnt = sol[1]
     sucap_cnt = sol[2]

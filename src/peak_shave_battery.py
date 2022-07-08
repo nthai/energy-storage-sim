@@ -126,6 +126,15 @@ class PeakShaveEnergyHub(EnergyHub):
             self.storages.append(PeakShaveLiIonBattery())
     
     def charge(self, pdemand, tdelta=1):
+        '''Attempts to charge batteries in the storage in order.
+        Args:
+            - pdemand: demand load in kW, the amount of power we want to store
+            - tdelta: time duration for which charging power should be applied
+                      (in hour)
+        Returns:
+            - total amount charged (in kW)
+            - total charge lost to self-discharge (in kW)'''
+
         total_charge = 0
         total_selfdischarge = 0
         for battery in self.storages:
@@ -136,6 +145,15 @@ class PeakShaveEnergyHub(EnergyHub):
         return total_charge, total_selfdischarge
 
     def discharge(self, pdemand, tdelta=1):
+        '''Attempts to discharge batteries in the storage in order.
+        Args:
+            - pdemand: demand load in kW, the amount of power we want to store
+            - tdelta: time duration for which charging power should be applied
+                      (in hour)
+        Returns:
+            - total amount charged (in kW)
+            - total charge lost to self-discharge (in kW)
+        '''
         total_discharge = 0
         total_selfdischarge = 0
         for battery in self.storages:
