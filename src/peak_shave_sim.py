@@ -1,3 +1,4 @@
+from distutils.log import info
 import gym
 import pandas as pd
 from peak_shave_battery import PeakShaveEnergyHub
@@ -88,7 +89,7 @@ class PeakShaveEnv(gym.Env):
         state = None
         reward = None
         done = False
-        infos = []
+        infos = {'pnet': pnet}
         report = ''
 
         if __debug__:
@@ -128,12 +129,14 @@ class PeakShaveEnv(gym.Env):
                 report += (f'No charge/discharge,   ' +
                            f'SelfD: {total_selfdischarge:6.2f} kW ')
 
+        infos['pbought'] = pbought
+        infos['soc'] = self.ehub.get_soc()
         cost = price * pbought / 100
         reward = -cost
 
         if __debug__:
             maxsoc = self.ehub.get_maxsoc()
-            soc = self.ehub.get_soc()
+            soc = infos['soc']
             report += f'SOC: {soc:8.2f} kWh ({soc/maxsoc*100:6.2f}%) '
             report += f'Price: {price:7.2f} '
             report += f'Money spent: {cost:7.2f}'
@@ -191,33 +194,41 @@ class PeakShaveSim:
                   f'Lower limit: {self.env.lowerlim}, ' + 
                   f'Upper limit: {self.env.upperlim}')
 
-    def run_const_limits(self, lowerlim, upperlim):
+    def run_const_limits(self, lowerlim, upperlim, create_log=False):
         '''Runs the simulation with constant upper and lower limits.
         Args:
             - lowerlim: lower limit for the peak-shaving.
             - upperlim: upper limit for the peak-shaving.
+            - create_log: bool value whether to create log of power values.
         Returns:
             - total_costs: total cost accumulated during the simulation.
+            - powers: log of pnet, pbought, and soc.
         '''
         total_costs = 0
         self.env.set_limits(lowerlim, upperlim)
+        powers = []
         for _, datarow in self.df.iterrows():
             pnet = datarow['net']
             price = datarow['price (cents/kWh)']
-            _, reward, _, _ = self.env.step(0, pnet, price)
+            _, reward, _, infos = self.env.step(0, pnet, price)
+            if create_log:
+                powers.append((infos['pnet'], infos['pbought'], infos['soc']))
             total_costs += -reward
-        return total_costs
+        return total_costs, powers
     
-    def run_dynamic_limits(self, lookahead=4, margin=.05):
+    def run_dynamic_limits(self, lookahead=4, margin=.05, create_log=False):
         '''Runs a simulation where the upper and lower limits for peak-shaving changes
         dynamically based on the median of future net power demand values.
         Args:
             - lookahead: the amount of future power values considered for the median.
             - margin: distance of upper and lower limits from the median.
+            - create_log: bool value whether to create log of power values.
         Returns:
             - total_costs: total cost accumulated during simulation.
+            - powers: log of pnet, pbought, and soc.
         '''
         total_costs = 0
+        powers = []
         for idx, datarow in self.df.iterrows():
             pmedian = self.df.iloc[idx:idx+lookahead]['net'].median()
             lowerlim = pmedian * (1 - margin)
@@ -226,10 +237,12 @@ class PeakShaveSim:
 
             pnet = datarow['net']
             price = datarow['price (cents/kWh)']
-            _, reward, _, _ = self.env.step(0, pnet, price)
+            _, reward, _, infos = self.env.step(0, pnet, price)
+            if create_log:
+                powers.append((infos['pnet'], infos['pbought'], infos['soc']))
             total_costs += -reward
 
-        return total_costs
+        return total_costs, powers
 
 def pkshave_constlims_objective(df: pd.DataFrame, liion_cnt: int, flywh_cnt: int,
                                 sucap_cnt: int, margin: float) -> float:
@@ -257,7 +270,7 @@ def pkshave_constlims_objective(df: pd.DataFrame, liion_cnt: int, flywh_cnt: int
         'Supercapacitor': sucap_cnt
     }
     sim = PeakShaveSim(config, df)
-    total_costs = sim.run_const_limits(lowerlim, upperlim)
+    total_costs, _ = sim.run_const_limits(lowerlim, upperlim)
     return total_costs
 
 def pkshave_dinlims_objective(df: pd.DataFrame, liion_cnt: int, flywh_cnt: int,
@@ -283,7 +296,7 @@ def pkshave_dinlims_objective(df: pd.DataFrame, liion_cnt: int, flywh_cnt: int,
         'Supercapacitor': sucap_cnt
     }
     sim = PeakShaveSim(config, df)
-    total_costs = sim.run_dynamic_limits(lookahead, margin)
+    total_costs, _ = sim.run_dynamic_limits(lookahead, margin)
     return total_costs
 
 def main():
