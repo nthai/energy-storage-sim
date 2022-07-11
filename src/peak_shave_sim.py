@@ -227,7 +227,6 @@ def pkshave_constlims_objective(df: pd.DataFrame, liion_cnt: int, flywh_cnt: int
     lowerlim = mean_demand * (1 - margin)
 
     config = {
-        'filename': FILENAME,
         'delta_limit': 1,
         'LiIonBattery': liion_cnt,
         'Flywheel': flywh_cnt,
@@ -254,7 +253,6 @@ def pkshave_dinlims_objective(df: pd.DataFrame, liion_cnt: int, flywh_cnt: int,
         - total_costs: amount spent on buying electricity from the grid.
     '''
     config = {
-        'filename': FILENAME,
         'delta_limit': 1,
         'LiIonBattery': liion_cnt,
         'Flywheel': flywh_cnt,

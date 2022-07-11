@@ -2,14 +2,22 @@ import pygad
 import pandas as pd
 from peak_shave_sim import pkshave_constlims_objective
 from peak_shave_sim import pkshave_dinlims_objective
+from peak_shave_sim import FILENAME
 
 FILENAME = '../data/full.csv'
-DF = pd.read_csv(FILENAME)
-DF['timestamp'] = pd.to_datetime(DF['timestamp'],
-                                    format='%m%d%Y %H:%M')
-DF['net'] = DF['Load (kWh)'] - DF['PV (kWh)']
+FILENAME = '../data/Sub71125.csv'
+DF = None
 
-def fitness_const(sol, sol_idx):
+def process_trafo_data(fname: str) -> pd.DataFrame:
+    df = pd.read_csv(fname, sep=';', decimal=',')
+    df['ReadTimestamp'] = pd.to_datetime(df['ReadTimestamp'])
+    df['EntryDateTime'] = pd.to_datetime(df['EntryDateTime'])
+    df = df.sort_values('ReadTimestamp', ascending=True).reset_index()
+    df['net'] = df['Delta A+[kWh]']
+    df['price (cents/kWh)'] = df['net']
+    return df
+
+def fitness_const(sol, sol_idx) -> float:
     '''Fitness function for the genetic algorithm to optimize for constant upper and
     lower limit in the peak-shaving algorithm.'''
     liion_cnt = sol[0]
@@ -19,7 +27,7 @@ def fitness_const(sol, sol_idx):
     cost = pkshave_constlims_objective(DF, liion_cnt, flywh_cnt, sucap_cnt, margin)
     return 10000000/cost
 
-def fitness_dynamic(sol, sol_idx):
+def fitness_dynamic(sol, sol_idx) -> float:
     '''Fitness function for the genetic algorithm to optimize for dynamically
     changing upper and lower limits for the peak-shaving algorithm. Limits change
     according to the median of future net power demand values.'''
@@ -83,9 +91,23 @@ def main():
         'mutation_type': 'random',
         'mutation_percent_genes': 50
     }
-    optimize_const_limit_objective(config)
+    # optimize_const_limit_objective(config)
     optimize_dynamic_limit_objective(config)
 
 
+def set_global_dataframe(fname):
+    global DF
+
+    print(f'Set dataframe from file: {fname}')
+
+    if 'short.csv' in fname or 'full.csv' in fname:
+        DF = pd.read_csv(FILENAME)
+        DF['timestamp'] = pd.to_datetime(DF['timestamp'],
+                                            format='%m%d%Y %H:%M')
+        DF['net'] = DF['Load (kWh)'] - DF['PV (kWh)']
+    elif 'Sub71125.csv' in fname:
+        DF = process_trafo_data(fname)
+
 if __name__ == '__main__':
+    set_global_dataframe(FILENAME)
     main()
