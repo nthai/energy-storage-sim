@@ -30,24 +30,46 @@ class PeakShaveEnv(gym.Env):
         self.lowerlim = lower
 
     def get_available_actions(self) -> list[int]:
-        '''Possible actions:
-            - 0: do nothing
-            - 1: dec. lower, dec. upper
-            - 2: dec. lower, inc. upper
-            - 3: inc. lower, dec. upper
-            - 4: inc. lower, inc. upper
+        '''Returns a list containing 0s and 1s. The i-th element of the list
+        tells whether action i is executable. The value i//3 determines the
+        action we execute on the upper limit, and the value i%3 determines
+        the action we execute on the lower limit. 0 means do nothing, 1 means
+        decrease, 2 means increase.
         '''
 
-        availables = [1, 0, 0, 0, 1]
+        availables = [1, 0, 0, 0, 0, 0, 1, 0, 1]
 
         if self.lowerlim - self.limdelta >= 0:
+            # we can decrease the lower limit
             availables[1] = 1
-            availables[2] = 1
+            availables[4] = 1
+            availables[7] = 1
         
         if self.lowerlim + self.limdelta <= self.upperlim - self.limdelta:
+            # we can increase the lower limit while decreasing the upper limit
+            availables[5] = 1
+        
+        if self.upperlim - self.lowerlim >= self.limdelta:
+            # we can increase the lower limit or decrease the upper limit
+            availables[2] = 1
             availables[3] = 1
 
         return availables
+
+    def _execute_action(self, action: int):
+        assert 0 <= action <= 8
+        act_lower = action % 3
+        act_upper = action // 3
+
+        if act_lower == 1:
+            self.lowerlim -= self.limdelta
+        elif act_lower == 2:
+            self.lowerlim += self.limdelta
+        
+        if act_upper == 1:
+            self.upperlim -= self.limdelta
+        elif act_upper == 2:
+            self.upperlim += self.limdelta
 
     def step(self, action: int, pnet: float, price: float):
         '''Makes a simulation step by charging/discharging the batteries based on the
@@ -71,6 +93,8 @@ class PeakShaveEnv(gym.Env):
 
         if __debug__:
             report += f'Demand: {pnet:8.2f} kW, '
+
+        self._execute_action(action)
 
         pbought = 0
         if pnet > self.upperlim:
