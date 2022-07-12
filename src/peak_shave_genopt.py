@@ -1,21 +1,11 @@
+import argparse
 import pygad
 import pandas as pd
 from peak_shave_sim import pkshave_constlims_objective
 from peak_shave_sim import pkshave_dinlims_objective
-from peak_shave_sim import FILENAME
+from util import process_file
 
-FILENAME = '../data/full.csv'
-FILENAME = '../data/Sub71125.csv'
 DF = None
-
-def process_trafo_data(fname: str) -> pd.DataFrame:
-    df = pd.read_csv(fname, sep=';', decimal=',')
-    df['ReadTimestamp'] = pd.to_datetime(df['ReadTimestamp'])
-    df['EntryDateTime'] = pd.to_datetime(df['EntryDateTime'])
-    df = df.sort_values('ReadTimestamp', ascending=True).reset_index()
-    df['net'] = df['Delta A+[kWh]']
-    df['price (cents/kWh)'] = df['net']
-    return df
 
 def fitness_const(sol, sol_idx) -> float:
     '''Fitness function for the genetic algorithm to optimize for constant upper and
@@ -77,12 +67,33 @@ def optimize_dynamic_limit_objective(config):
     print(f'Solution: {sol}')
     print(f'Fitness: {sol_fitness}')
 
-def main():
+def parse_config() -> dict:
+    parser = argparse.ArgumentParser(description='Run genetic algorithm to optimize' +
+                                     ' peak-shave.')
+    parser.add_argument('--limit_mode', type=str, default='const',
+                        help='Determines how the upper and lower limit should be ' +
+                        'set. Upper and lower limit are set at the start in case' +
+                        ' of `const` or set dynamically at each timestep in case' +
+                        ' of `dyn`.')
+    parser.add_argument('--num_generations', type=int, default=500,
+                        help='Number of generations in the genetic algorithm.')
+    parser.add_argument('--sol_per_pop', type=int, default=10,
+                        help='Number of solutions per population.')
+    parser.add_argument('--datafile', type=str, default='short.csv',
+                        help='Name of the file used as source data. File has to ' +
+                        'be in the data folder.')
+    args = parser.parse_args()
+
+    if args.limit_mode not in {'const', 'dyn'}:
+        raise Exception('--limit_mode must be either `const` or `dyn`!')
+
     config = {
+        'datafile': args.datafile,
+        'limit_mode': args.limit_mode,
         'on_generation': on_generation,
-        'num_generations': 500,
+        'num_generations': args.num_generations,
         'num_parents_mating': 8,
-        'sol_per_pop': 10,
+        'sol_per_pop': args.sol_per_pop,
         'init_range_low': 0,
         'init_range_high': 50,
         'parent_selection_type': 'sss',
@@ -91,23 +102,22 @@ def main():
         'mutation_type': 'random',
         'mutation_percent_genes': 50
     }
-    # optimize_const_limit_objective(config)
-    optimize_dynamic_limit_objective(config)
+    return config
 
+def main(config):
+    opt_config = {k: v for k, v in config.items() if k not in {'limit_mode', 'datafile'}}
+    if config['limit_mode'] == 'const':
+        optimize_const_limit_objective(opt_config)
+    elif config['limit_mode'] == 'dyn':
+        optimize_dynamic_limit_objective(opt_config)
 
 def set_global_dataframe(fname):
     global DF
 
     print(f'Set dataframe from file: {fname}')
-
-    if 'short.csv' in fname or 'full.csv' in fname:
-        DF = pd.read_csv(FILENAME)
-        DF['timestamp'] = pd.to_datetime(DF['timestamp'],
-                                            format='%m%d%Y %H:%M')
-        DF['net'] = DF['Load (kWh)'] - DF['PV (kWh)']
-    elif 'Sub71125.csv' in fname:
-        DF = process_trafo_data(fname)
+    DF = process_file(fname)
 
 if __name__ == '__main__':
-    set_global_dataframe(FILENAME)
-    main()
+    config = parse_config()
+    set_global_dataframe('../data/' + config['datafile'])
+    main(config)

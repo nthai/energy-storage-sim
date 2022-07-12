@@ -1,10 +1,8 @@
-from distutils.log import info
+import argparse
 import gym
 import pandas as pd
 from peak_shave_battery import PeakShaveEnergyHub
-
-FILENAME = '../data/short.csv'
-# FILENAME = '../data/full.csv'
+from util import process_file
 
 class PeakShaveEnv(gym.Env):
     def __init__(self, config: dict) -> None:
@@ -137,7 +135,10 @@ class PeakShaveEnv(gym.Env):
         if __debug__:
             maxsoc = self.ehub.get_maxsoc()
             soc = infos['soc']
-            report += f'SOC: {soc:8.2f} kWh ({soc/maxsoc*100:6.2f}%) '
+            if len(self.ehub.storages) > 0:
+                report += f'SOC: {soc:8.2f} kWh ({soc/maxsoc*100:6.2f}%) '
+            else:
+                report += 'SOC:     0.00 kWh (0%) '
             report += f'Price: {price:7.2f} '
             report += f'Money spent: {cost:7.2f}'
             print(report)
@@ -299,12 +300,37 @@ def pkshave_dinlims_objective(df: pd.DataFrame, liion_cnt: int, flywh_cnt: int,
     total_costs, _ = sim.run_dynamic_limits(lookahead, margin)
     return total_costs
 
+def get_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--limit_mode', type=str, default='const')
+    parser.add_argument('--datafile', type=str, default='short.csv')
+    parser.add_argument('--liion', type=int, default=3)
+    parser.add_argument('--flywheel', type=int, default=3)
+    parser.add_argument('--supercap', type=int, default=3)
+    parser.add_argument('--lookahead', type=int, default=None)
+    parser.add_argument('--margin', type=float, default=.05)
+
+    args = parser.parse_args()
+
+    if args.limit_mode not in {'const', 'dyn'}:
+        raise Exception('--limit_mode must be either `const` or `dyn`!')
+    if args.limit_mode == 'dyn' and args.lookahead is None:
+        raise Exception('You must provide --lookahead if --limit_mode is `dyn`!')
+
+    return args
+
 def main():
-    df = pd.read_csv(FILENAME)
-    df['timestamp'] = pd.to_datetime(df['timestamp'],
-                                     format='%m%d%Y %H:%M')
-    df['net'] = df['Load (kWh)'] - df['PV (kWh)']
-    total_costs = pkshave_constlims_objective(df, 3, 3, 3, .2)
+    args = get_args()
+    fname = '../data/' + args.datafile
+
+    df = process_file(fname)
+    if args.limit_mode == 'const':
+        total_costs = pkshave_constlims_objective(df, args.liion, args.flywheel,
+                                                  args.supercap, args.margin)
+    elif args.limit_mode == 'dyn':
+        total_costs = pkshave_dinlims_objective(df, args.liion, args.flywheel,
+                                                args.supercap, args.lookahead,
+                                                args.margin)
     print(total_costs)
 
 if __name__ == '__main__':
