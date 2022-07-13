@@ -209,7 +209,8 @@ class PeakShaveSim:
                   f'Lower limit: {self.env.lowerlim}, ' + 
                   f'Upper limit: {self.env.upperlim}')
 
-    def run_const_limits(self, lowerlim, upperlim, create_log=False):
+    def run_const_limits(self, lowerlim, upperlim, penalize_charging=False,
+                         create_log=False):
         '''Runs the simulation with constant upper and lower limits.
         Args:
             - lowerlim: lower limit for the peak-shaving.
@@ -220,12 +221,17 @@ class PeakShaveSim:
             - powers: log of pnet, pbought, and soc.
         '''
         total_costs = 0
+        prev_soc, curr_soc = 0, 0
         self.env.set_limits(lowerlim, upperlim)
         powers = []
         for _, datarow in self.df.iterrows():
             pnet = datarow['net']
             price = datarow['price (cents/kWh)']
             _, reward, _, infos = self.env.step(0, pnet, price)
+            if penalize_charging:
+                prev_soc = curr_soc
+                curr_soc = self.env.ehub.get_soc()
+                total_costs += -((prev_soc - curr_soc) ** 2)
             if create_log:
                 powers.append((infos['pnet'], infos['pbought'], infos['soc']))
             total_costs += -reward
@@ -235,7 +241,8 @@ class PeakShaveSim:
 
         return total_costs, powers
     
-    def run_dynamic_limits(self, lookahead=4, margin=.05, create_log=False):
+    def run_dynamic_limits(self, lookahead=4, margin=.05, penalize_charging=False,
+                           create_log=False):
         '''Runs a simulation where the upper and lower limits for peak-shaving changes
         dynamically based on the median of future net power demand values.
         Args:
@@ -247,6 +254,7 @@ class PeakShaveSim:
             - powers: log of pnet, pbought, and soc.
         '''
         total_costs = 0
+        prev_soc, curr_soc = 0, 0
         powers = []
         for idx, datarow in self.df.iterrows():
             pmedian = self.df.iloc[idx:idx+lookahead]['net'].median()
@@ -257,6 +265,10 @@ class PeakShaveSim:
             pnet = datarow['net']
             price = datarow['price (cents/kWh)']
             _, reward, _, infos = self.env.step(0, pnet, price)
+            if penalize_charging:
+                prev_soc = curr_soc
+                curr_soc = self.env.ehub.get_soc()
+                total_costs += -((prev_soc - curr_soc) ** 2)
             if create_log:
                 powers.append((infos['pnet'], infos['pbought'], infos['soc']))
             total_costs += -reward
@@ -266,8 +278,10 @@ class PeakShaveSim:
 
         return total_costs, powers
     
-    def run_equalized_limits(self, lookahead=24, create_log=False):
+    def run_equalized_limits(self, lookahead=24, penalize_charging=False,
+                             create_log=False):
         total_costs = 0
+        prev_soc, curr_soc = 0, 0
         powers = []
         for idx, datarow in self.df.iterrows():
             idxfrom = max(0, idx - lookahead)
@@ -279,6 +293,10 @@ class PeakShaveSim:
             pnet = datarow['net']
             price = datarow['price (cents/kWh)']
             _, reward, _, infos = self.env.step(0, pnet, price)
+            if penalize_charging:
+                prev_soc = curr_soc
+                curr_soc = self.env.ehub.get_soc()
+                total_costs += -((prev_soc - curr_soc) ** 2)
             if create_log:
                 powers.append((infos['pnet'], lowerlim, upperlim, infos['pbought'], infos['soc']))
             total_costs += -reward
