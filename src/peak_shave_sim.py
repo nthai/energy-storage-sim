@@ -3,6 +3,7 @@ import gym
 import pandas as pd
 from peak_shave_battery import PeakShaveEnergyHub
 from util import process_file
+from util import compute_limits
 
 class PeakShaveEnv(gym.Env):
     def __init__(self, config: dict) -> None:
@@ -169,6 +170,19 @@ class PeakShaveSim:
         df['net'] = df['Load (kWh)'] - df['PV (kWh)']
         return df
 
+    def _compute_capex_opex(self):
+        '''Computes the capital and the operational expenses of the energy hub buy first
+        determining the length of the period'''
+        start = self.df.iloc[0]['ReadTimestamp']
+        end = self.df.iloc[-1]['ReadTimestamp']
+        delta = end - start # simulation time
+        delta = delta.days * 24 + delta.seconds // 60 // 60 # simulation in hours
+
+        capex = self.env.ehub.get_capex(delta)
+        opex = self.env.ehub.get_opex(delta)
+
+        return capex, opex
+
     def set_median_limits(self, margin=0.05):
         '''Sets the upper and lower limits around the median of the full dataset.
         Args:
@@ -215,6 +229,10 @@ class PeakShaveSim:
             if create_log:
                 powers.append((infos['pnet'], infos['pbought'], infos['soc']))
             total_costs += -reward
+
+        capex, opex = self._compute_capex_opex()
+        total_costs += capex + opex
+
         return total_costs, powers
     
     def run_dynamic_limits(self, lookahead=4, margin=.05, create_log=False):
@@ -242,6 +260,31 @@ class PeakShaveSim:
             if create_log:
                 powers.append((infos['pnet'], infos['pbought'], infos['soc']))
             total_costs += -reward
+
+        capex, opex = self._compute_capex_opex()
+        total_costs += capex + opex
+
+        return total_costs, powers
+    
+    def run_equalized_limits(self, lookahead=24, create_log=False):
+        total_costs = 0
+        powers = []
+        for idx, datarow in self.df.iterrows():
+            idxfrom = max(0, idx - lookahead)
+            idxto = min(len(self.df) - 1, idx + lookahead)
+            next_pnets = self.df.iloc[idxfrom:idxto]['net']
+            lowerlim, upperlim = compute_limits(next_pnets)
+            self.env.set_limits(lowerlim, upperlim)
+
+            pnet = datarow['net']
+            price = datarow['price (cents/kWh)']
+            _, reward, _, infos = self.env.step(0, pnet, price)
+            if create_log:
+                powers.append((infos['pnet'], lowerlim, upperlim, infos['pbought'], infos['soc']))
+            total_costs += -reward
+
+        capex, opex = self._compute_capex_opex()
+        total_costs += capex + opex
 
         return total_costs, powers
 
@@ -333,5 +376,16 @@ def main():
                                                 args.margin)
     print(total_costs)
 
+def test_equalized_runs():
+    df = process_file('../data/Sub71125.csv')
+    config = {
+        'delta_limit': 1,
+        'LiIonBattery': 10,
+        'Flywheel': 10,
+        'Supercapacitor': 10
+    }
+    sim = PeakShaveSim(config, df)
+    _, _ = sim.run_equalized_limits(create_log=True)
+
 if __name__ == '__main__':
-    main()
+    test_equalized_runs()
