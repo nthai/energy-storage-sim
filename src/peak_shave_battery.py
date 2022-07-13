@@ -171,7 +171,7 @@ class PeakShaveEnergyHub(EnergyHub):
 
     def get_soc(self):
         '''Returns the total state-of-charge of all batteries (in kWh).'''
-        return sum([battery.get_soc() for battery in self.storages])
+        return sum(battery.get_soc() for battery in self.storages)
     
     def get_maxsoc(self):
         '''Returns the total maximum state-of-charge of all batteries (in kWh).'''
@@ -180,3 +180,27 @@ class PeakShaveEnergyHub(EnergyHub):
     def reset(self):
         for battery in self.storages:
             battery.reset()
+
+    def compute_reserve_time(self, pnet_list):
+        soc_list = self.save_soc()
+
+        hours = 0
+        for pnet in pnet_list:
+            self.discharge(pnet)
+            if self.get_soc() > 0:
+                hours += 1
+            else:
+                break
+
+        self.load_soc(soc_list)
+        return hours
+    
+    def compute_full_reserve(self, pnet_list):
+        soc_list = self.save_soc()
+
+        for battery in self.storages:
+            battery.soc = battery.get_max_soc()
+        hours = self.compute_reserve_time(pnet_list)
+
+        self.load_soc(soc_list)
+        return hours

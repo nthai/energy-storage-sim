@@ -211,6 +211,16 @@ class EnergyHub:
     def get_opex(self, t):
         return sum([battery.get_opex(t) for battery in self.storages])
 
+    def save_soc(self) -> list[float]:
+        soc_list = []
+        for battery in self.storages:
+            soc_list.append(battery.soc)
+        return soc_list
+
+    def load_soc(self, soc_list: list[float]):
+        for idx, battery in enumerate(self.storages):
+            battery.soc = soc_list[idx]
+
 def test():
     #TODO
     pass
