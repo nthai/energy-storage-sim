@@ -1,6 +1,10 @@
 from batteries import Battery, EnergyHub
 from batteries import CONFIG
 
+'''
+    Assumptions:
+        - charging power is always enough to charge batteries up to maximum SOC.
+'''
 
 def chop(val, to=0, delta=1e-10):
     if to - delta <= val <= to + delta:
@@ -84,10 +88,10 @@ class PeakShaveBattery(Battery):
         if pdemand == 0:
             return 0, 0, sdcharge
 
-        pdischarge = min(pdemand, self.maxdischarge)
+        pdischarge = min(pdemand / self.etadischarge, self.maxdischarge)
 
-        if self.soc - self.etadischarge * (pdischarge * tdelta) < self.minsoc:
-            pdischarge = (self.soc - self.minsoc) / self.etadischarge / tdelta
+        if self.soc - (pdischarge * tdelta) < self.minsoc:
+            pdischarge = (self.soc - self.minsoc) / tdelta
         self.soc = self.soc - self.etadischarge * (pdischarge * tdelta)
         self.soc = chop(self.soc)
         assert self.soc >= self.minsoc
@@ -182,6 +186,12 @@ class PeakShaveEnergyHub(EnergyHub):
             battery.reset()
 
     def compute_reserve_time(self, pnet_list):
+        '''Given a list of power demands, computes how much time would we last on
+        our batteries only.
+        Args:
+            - pnet_list: list of power demands
+        Returns:
+            - hours: how many hours would the batteries last'''
         soc_list = self.save_soc()
 
         hours = 0
@@ -196,11 +206,20 @@ class PeakShaveEnergyHub(EnergyHub):
         return hours
     
     def compute_full_reserve(self, pnet_list):
+        '''Given a list of power demands, computes, how long would we last if the
+        batteries were full.
+        Args:
+            - pnet_list: list of power demands
+        Returns:
+            - hours: '''
         soc_list = self.save_soc()
 
         for battery in self.storages:
-            battery.soc = battery.get_max_soc()
+            battery.soc = battery.get_maxsoc()
         hours = self.compute_reserve_time(pnet_list)
 
         self.load_soc(soc_list)
         return hours
+
+    def power_until(self, tstep, pnet_list):
+        pass

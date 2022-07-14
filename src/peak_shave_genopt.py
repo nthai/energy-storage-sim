@@ -82,14 +82,20 @@ def parse_config() -> dict:
     parser.add_argument('--datafile', type=str, default='short.csv',
                         help='Name of the file used as source data. File has to ' +
                         'be in the data folder.')
+    parser.add_argument('--penalize_charging', action=argparse.BooleanOptionalAction,
+                        default=False)
     args = parser.parse_args()
 
     if args.limit_mode not in {'const', 'dyn'}:
         raise Exception('--limit_mode must be either `const` or `dyn`!')
 
-    config = {
+    run_config = {
         'datafile': args.datafile,
+        'penalize_charging': args.penalize_charging,
         'limit_mode': args.limit_mode,
+    }
+
+    pygad_config = {
         'on_generation': on_generation,
         'num_generations': args.num_generations,
         'num_parents_mating': 8,
@@ -102,14 +108,20 @@ def parse_config() -> dict:
         'mutation_type': 'random',
         'mutation_percent_genes': 50
     }
-    return config
 
-def main(config):
-    opt_config = {k: v for k, v in config.items() if k not in {'limit_mode', 'datafile'}}
-    if config['limit_mode'] == 'const':
-        optimize_const_limit_objective(opt_config)
-    elif config['limit_mode'] == 'dyn':
-        optimize_dynamic_limit_objective(opt_config)
+    configs = {
+        'run_config': run_config,
+        'pygad_config': pygad_config
+    }
+    return configs
+
+def main(configs):
+    run_config = configs['run_config']
+    pygad_config = configs['pygad_config']
+    if run_config['limit_mode'] == 'const':
+        optimize_const_limit_objective(pygad_config)
+    elif run_config['limit_mode'] == 'dyn':
+        optimize_dynamic_limit_objective(pygad_config)
 
 def set_global_dataframe(fname):
     global DF
@@ -118,6 +130,6 @@ def set_global_dataframe(fname):
     DF = process_file(fname)
 
 if __name__ == '__main__':
-    config = parse_config()
-    set_global_dataframe('../data/' + config['datafile'])
-    main(config)
+    configs = parse_config()
+    set_global_dataframe('../data/' + configs['run_config']['datafile'])
+    main(configs)

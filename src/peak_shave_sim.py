@@ -209,7 +209,7 @@ class PeakShaveSim:
                   f'Lower limit: {self.env.lowerlim}, ' + 
                   f'Upper limit: {self.env.upperlim}')
 
-    def run_const_limits(self, lowerlim, upperlim, penalize_charging=False,
+    def run_const_limits(self, lowerlim, upperlim, penalize_charging=True,
                          create_log=False):
         '''Runs the simulation with constant upper and lower limits.
         Args:
@@ -231,7 +231,7 @@ class PeakShaveSim:
             if penalize_charging:
                 prev_soc = curr_soc
                 curr_soc = self.env.ehub.get_soc()
-                total_costs += -((prev_soc - curr_soc) ** 2)
+                total_costs += ((prev_soc - curr_soc) ** 2)
             if create_log:
                 powers.append((infos['pnet'], infos['pbought'], infos['soc']))
             total_costs += -reward
@@ -241,7 +241,7 @@ class PeakShaveSim:
 
         return total_costs, powers
     
-    def run_dynamic_limits(self, lookahead=4, margin=.05, penalize_charging=False,
+    def run_dynamic_limits(self, lookahead=4, margin=.05, penalize_charging=True,
                            create_log=False):
         '''Runs a simulation where the upper and lower limits for peak-shaving changes
         dynamically based on the median of future net power demand values.
@@ -268,7 +268,7 @@ class PeakShaveSim:
             if penalize_charging:
                 prev_soc = curr_soc
                 curr_soc = self.env.ehub.get_soc()
-                total_costs += -((prev_soc - curr_soc) ** 2)
+                total_costs += ((prev_soc - curr_soc) ** 2)
             if create_log:
                 powers.append((infos['pnet'], infos['pbought'], infos['soc']))
             total_costs += -reward
@@ -278,7 +278,7 @@ class PeakShaveSim:
 
         return total_costs, powers
     
-    def run_equalized_limits(self, lookahead=24, penalize_charging=False,
+    def run_equalized_limits(self, lookahead=24, penalize_charging=True,
                              create_log=False):
         total_costs = 0
         prev_soc, curr_soc = 0, 0
@@ -296,7 +296,7 @@ class PeakShaveSim:
             if penalize_charging:
                 prev_soc = curr_soc
                 curr_soc = self.env.ehub.get_soc()
-                total_costs += -((prev_soc - curr_soc) ** 2)
+                total_costs += ((prev_soc - curr_soc) ** 2)
             if create_log:
                 powers.append((infos['pnet'], lowerlim, upperlim, infos['pbought'], infos['soc']))
             total_costs += -reward
@@ -403,7 +403,14 @@ def test_equalized_runs():
         'Supercapacitor': 10
     }
     sim = PeakShaveSim(config, df)
-    _, _ = sim.run_equalized_limits(create_log=True)
+    # total_costs, _ = sim.run_equalized_limits(penalize_charging=True, create_log=True)
+    
+    margin = .02
+    mean_demand = df['net'].mean()
+    upperlim = mean_demand * (1 + margin)
+    lowerlim = mean_demand * (1 - margin)
+    total_costs, _ = sim.run_const_limits(upperlim=upperlim, lowerlim=lowerlim, penalize_charging=True, create_log=True)
+    print(f'Equalized run total costs: {total_costs}')
 
 if __name__ == '__main__':
     test_equalized_runs()
