@@ -3,6 +3,7 @@ from datetime import datetime
 import pandas as pd
 
 class FluctuationCalculator:
+    '''Class object computes and stores the net power fluctuation.'''
     def __init__(self) -> None:
         self.prev_value = None
         self.count = 0
@@ -10,6 +11,11 @@ class FluctuationCalculator:
         self.diff_total = 0
 
     def store(self, value) -> None:
+        '''Computes the difference between two consecutive `power` values;
+        aggregates the value into a sum and increases the count of values
+        by 1.
+        Args:
+            - value: the power value to store.'''
         if self.prev_value is not None:
             diff = abs(self.prev_value - value)
             self.diff_total += diff
@@ -20,8 +26,10 @@ class FluctuationCalculator:
     def get_net_demand_fluctuation(self) -> float:
         return self.diff_total / (self.total / self.count)
 
-
 class FluctuationPeriodCalculator:
+    '''Computes the mean net power fluctuation, by computing the power
+    fluctuation for every 24 hours and storing it in a list. The mean
+    of such fluctuations give the mean power fluctuation.'''
     def __init__(self) -> None:
         self.prev_value = None
         self.diff_total = 0
@@ -51,6 +59,8 @@ class FluctuationPeriodCalculator:
         return sum(self.fluct_list) / len(self.fluct_list)
 
 class PeakPowerSumCalculator:
+    '''Detects whether power value is a local peak and stores it if
+    it is above the upper threshold limit.'''
     def __init__(self, df: pd.DataFrame) -> None:
         self.df = df
         self.peaks = []
