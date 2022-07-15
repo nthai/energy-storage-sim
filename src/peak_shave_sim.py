@@ -234,6 +234,7 @@ class PeakShaveSim:
                 total_costs += ((prev_soc - curr_soc) ** 2)
             if create_log:
                 powers.append((infos['pnet'], infos['pbought'], infos['soc']))
+                print(type(datarow['timestamp']), infos['pbought'])
             total_costs += -reward
 
         capex, opex = self._compute_capex_opex()
