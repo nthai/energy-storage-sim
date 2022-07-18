@@ -62,10 +62,16 @@ class PeakPowerSumCalculator:
     '''Detects whether power value is a local peak and stores it if
     it is above the upper threshold limit.'''
     def __init__(self, df: pd.DataFrame) -> None:
+        '''Args:
+            - df: pandas.DataFrame of the input file. `net` must be key of
+                net power demand.'''
         self.df = df
         self.peaks = []
 
     def _is_peak(self, idx, delta) -> bool:
+        '''Checks whether df.iloc[idx] is larger than df.iloc[idx-1] and
+        df.iloc[idx+1] and also checks if df.iloc[idx] is maximum in
+        df.iloc[idx-delta:idx+delta].'''
         curr_value = self.df.iloc[idx]['net']
         if idx > 0 and self.df.iloc[idx - 1]['net'] > curr_value:
             return False
@@ -78,6 +84,14 @@ class PeakPowerSumCalculator:
         return math.isclose(curr_value, local_peak)
 
     def store(self, idx: int, upperlim, delta: int=10):
+        '''Checks if data point at idx is a local peak in the pandas dataframe.
+        Args:
+            - idx: the index/location of the datapoint in the dataframe in question.
+            - upperlim: the limit above which we consider a peak. If df.iloc[idx] id below
+                upperlim, we ignore the data point.
+            - delta: datapoint is peak if it is larger than adjacent values and is maximum
+                in the [idx - delta, ..., idx + delta] range.
+        '''
         curr_value = self.df.iloc[idx]['net']
         if curr_value > upperlim and self._is_peak(idx, delta):
             self.peaks.append(curr_value)
@@ -106,6 +120,15 @@ def process_file(fname: str) -> pd.DataFrame:
     return df
 
 def sum_above_below(pnets, lower, upper):
+    '''Calculates the sum of values in the pnets list above the upper limit
+    and below the lower limit.
+    Args:
+        - pnets: list of net power demand values
+        - lower: lower limit
+        - upper: upper limit
+    Returns:
+        - sumbelow: total area below the lower limit
+        - sumabove: total area above the upper limit'''
     sumbelow, sumabove = 0, 0
     for pnet in pnets:
         if pnet < lower:
