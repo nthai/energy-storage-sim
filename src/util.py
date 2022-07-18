@@ -180,3 +180,29 @@ def test_compute_limits():
 
 if __name__ == '__main__':
     test_compute_limits()
+    
+    import unittest
+
+    class TestPeakPowerSumCalculator(unittest.TestCase):
+        def setUp(self) -> None:
+            print('\nSetup')
+            return super().setUp()
+
+        def test1(self):
+            print('Running test 1.')
+            self.assertEqual(2, 1+1)
+
+        def test2(self):
+            print('Running test 2.')
+            self.assertEqual(2, 1+1)
+
+        def test3(self):
+            print('Running test 3.')
+            self.assertEqual(2, 1+1)
+        
+        def tearDown(self) -> None:
+            print('Tear down')
+            return super().tearDown()
+
+
+    unittest.main()
