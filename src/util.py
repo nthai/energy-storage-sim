@@ -78,8 +78,12 @@ class PeakPowerSumCalculator:
         if idx < len(self.df) - 1 and self.df.iloc[idx + 1]['net'] > curr_value:
             return False
 
+
         left = max(idx - delta, 0)
         right = min(len(self.df) - 1, idx + delta)
+        if any(math.isclose(self.df.iloc[idx]['net'], self.df.iloc[i]['net'])
+               for i in range(left, right + 1) if i != idx):
+            return False
         local_peak = max(self.df.iloc[left:right]['net'])
         return math.isclose(curr_value, local_peak)
 
@@ -179,30 +183,81 @@ def test_compute_limits():
     print(lower, upper)
 
 if __name__ == '__main__':
-    test_compute_limits()
+    # test_compute_limits()
     
     import unittest
+    import numpy as np
+    import matplotlib.pyplot as plt
 
     class TestPeakPowerSumCalculator(unittest.TestCase):
-        def setUp(self) -> None:
-            print('\nSetup')
-            return super().setUp()
-
         def test1(self):
-            print('Running test 1.')
-            self.assertEqual(2, 1+1)
+            x = np.arange(0, 10, 0.01)
+            y = np.sin(x) + 1
+            df = pd.DataFrame({'x': x, 'net': y})
+            ppscalc = PeakPowerSumCalculator(df)
+
+            for idx, _ in df.iterrows():
+                ppscalc.store(idx, 1, 10)
+            
+            self.assertEqual(ppscalc.get_peak_count(), 2)
 
         def test2(self):
-            print('Running test 2.')
-            self.assertEqual(2, 1+1)
+            x = np.arange(0, 10, 0.01)
+            y = np.sin(x) + 1
+            df = pd.DataFrame({'x': x, 'net': y})
+            ppscalc = PeakPowerSumCalculator(df)
 
-        def test3(self):
-            print('Running test 3.')
-            self.assertEqual(2, 1+1)
+            for idx, _ in df.iterrows():
+                ppscalc.store(idx, 2, 10)
+            
+            self.assertEqual(ppscalc.get_peak_count(), 0)
         
-        def tearDown(self) -> None:
-            print('Tear down')
-            return super().tearDown()
+        def test3(self):
+            x = np.arange(0, 10, 0.01)
+            df = pd.DataFrame({'net': x})
+            ppscalc = PeakPowerSumCalculator(df)
+            for idx, _ in df.iterrows():
+                ppscalc.store(idx, 0, 10)
+            self.assertEqual(ppscalc.get_peak_count(), 0)
 
+        def test4(self):
+            x = np.arange(0, -10, -0.01)
+            df = pd.DataFrame({'net': x})
+            ppscalc = PeakPowerSumCalculator(df)
+            for idx, _ in df.iterrows():
+                ppscalc.store(idx, 0, 10)
+            self.assertEqual(ppscalc.get_peak_count(), 0)
+            self.assertEqual(ppscalc.get_peak_count(), 0)
+
+        def test5(self):
+            x = [1 if i%2 == 0 else -1 for i in range(100)]
+            df = pd.DataFrame({'net': x})
+            ppscalc = PeakPowerSumCalculator(df)
+            for idx, _ in df.iterrows():
+                ppscalc.store(idx, 0, 10)
+            self.assertEqual(ppscalc.get_peak_count(), 0)
+
+    class TestFluctuationCalculator(unittest.TestCase):
+        def test1(self):
+            fcalc = FluctuationCalculator()
+            count = 100
+            rndlist = np.random.rand(count)
+            num, den = 0, 0
+            for i in range(count):
+                if i > 0:
+                    num += abs(rndlist[i] - rndlist[i - 1])
+                den += rndlist[i]
+                fcalc.store(rndlist[i])
+            den /= count
+            fluct = num / den
+
+            self.assertAlmostEqual(fluct, fcalc.get_net_demand_fluctuation())
+
+        def test2(self):
+            nums = [1.23] * 50
+            fcalc = FluctuationCalculator()
+            for elem in nums:
+                fcalc.store(elem)
+            self.assertAlmostEqual(fcalc.get_net_demand_fluctuation(), 0)
 
     unittest.main()
