@@ -171,7 +171,7 @@ class PeakShaveSim:
         return df
 
     def _compute_capex_opex(self):
-        '''Computes the capital and the operational expenses of the energy hub buy first
+        '''Computes the capital and the operational expenses of the energy hub by first
         determining the length of the period'''
         start = self.df.iloc[0]['ReadTimestamp']
         end = self.df.iloc[-1]['ReadTimestamp']

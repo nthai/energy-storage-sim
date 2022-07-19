@@ -17,8 +17,21 @@ class GreedySim():
     def reset(self):
         self.ehub.reset()
 
+    def _compute_capex_opex(self):
+        '''Computes the capital and the operational expenses of the energy hub by first
+        determining the length of the period'''
+        start = self.df.iloc[0]['ReadTimestamp']
+        end = self.df.iloc[-1]['ReadTimestamp']
+        delta = end - start # simulation time
+        delta = delta.days * 24 + delta.seconds // 60 // 60 # simulation in hours
+
+        capex = self.ehub.get_capex(delta)
+        opex = self.ehub.get_opex(delta)
+
+        return capex, opex
+
     def run(self):
-        total_cost = 0
+        energy_cost = 0
         for idx, datarow in self.df.iterrows():
             if __debug__:
                 print(f'{idx:3d} {datarow["net"]:5.1f}')
@@ -45,7 +58,7 @@ class GreedySim():
                 # see how much power we need to charge up completely
                 pneed = self.ehub.power_to_max()
                 # buy that power
-                pbought += pneed
+                pbought += pneed * prices.iloc[0] / 100
                 # use it to charge the ehub
                 self.ehub.charge(pneed)
                 if __debug__:
@@ -57,18 +70,27 @@ class GreedySim():
             if __debug__:
                 print(f'\tdischarge: {datarow["net"]:.2f}')
                 print(f'\tnew soc: {self.ehub.get_soc():.2f}')
-            total_cost += pbought
-        print(f'Total cost: {total_cost}')
+            energy_cost += pbought
+        capex, opex = self._compute_capex_opex()
+        costs = {
+            'energy_cost': energy_cost,
+            'capex': capex,
+            'opex': opex,
+            'total_costs': energy_cost + capex + opex
+        }
+        return costs
 
 def test_greedy_sim():
     config = {
         'datafile': FILEPATH + '/../data/Sub71125.csv',
-        'LiIonBattery': 10,
-        'Flywheel': 10,
-        'Supercapacitor': 10
+        'LiIonBattery': 1,
+        'Flywheel': 0,
+        'Supercapacitor': 0
     }
 
     sim = GreedySim(config)
-    sim.run()
+    costs = sim.run()
+    print(costs)
+
 if __name__ == '__main__':
     test_greedy_sim()
