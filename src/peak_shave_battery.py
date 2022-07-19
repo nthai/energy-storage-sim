@@ -1,3 +1,4 @@
+import numpy as np
 from batteries import Battery, EnergyHub
 from batteries import CONFIG
 
@@ -96,8 +97,13 @@ class PeakShaveBattery(Battery):
         self.soc = chop(self.soc)
         assert self.soc >= self.minsoc
 
-        premain = pdemand - pdischarge
+        premain = chop(pdemand - pdischarge * self.etadischarge)
         return pdischarge, premain, sdcharge
+
+    def power_to_max(self) -> float:
+        '''Returns the amount of power needed to charge up this battery to
+        the max.'''
+        return (self.maxsoc - self.soc) / self.etacharge
 
 class PeakShaveLiIonBattery(PeakShaveBattery):
     def __init__(self) -> None:
@@ -185,9 +191,16 @@ class PeakShaveEnergyHub(EnergyHub):
         for battery in self.storages:
             battery.reset()
 
+    def power_to_max(self):
+        '''Returns the amount of power necessary to charge the whole ehub to max.'''
+        power = 0
+        for battery in self.storages:
+            power += battery.power_to_max()
+        return power
+
     def compute_reserve_time(self, pnet_list):
         '''Given a list of power demands, computes how much time would we last on
-        our batteries only.
+        our batteries only. We assume that the minimum SOC is zero.
         Args:
             - pnet_list: list of power demands
         Returns:
@@ -220,6 +233,17 @@ class PeakShaveEnergyHub(EnergyHub):
 
         self.load_soc(soc_list)
         return hours
+
+    def find_next_charge_time(self, price_list, treserve):
+        '''
+        Args:
+            - price_list: list of electricity prices
+            - treserve: amount of time the energyhub would last if it was full
+        '''
+        curr_price = price_list[0]
+        end = min(len(price_list), treserve + 1)
+        min_idx = np.argmin(price_list[:end])
+        return min_idx
 
     def power_until(self, tstep, pnet_list):
         pass

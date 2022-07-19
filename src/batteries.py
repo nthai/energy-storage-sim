@@ -3,10 +3,11 @@ import os
 import yaml
 
 CONFIG = None
-CONFFILE = 'batteries.yaml'
+CONFFILE = '/batteries.yaml'
+FILEPATH = os.path.dirname(os.path.abspath(__file__))
 
-print(f'{os.path.basename(__file__)}: loading battery config from {CONFFILE}...')
-with open(CONFFILE) as configfile:
+print(f'{os.path.basename(__file__)}: loading battery config from {FILEPATH+CONFFILE}...')
+with open(FILEPATH+CONFFILE) as configfile:
     CONFIG = yaml.safe_load(configfile)
 
 class Battery(ABC):

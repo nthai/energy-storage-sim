@@ -2,7 +2,7 @@ import argparse
 import gym
 import pandas as pd
 from peak_shave_battery import PeakShaveEnergyHub
-from util import process_file
+from util import FluctuationCalculator, FluctuationPeriodCalculator, PeakPowerSumCalculator, process_file
 from util import compute_limits
 
 class PeakShaveEnv(gym.Env):
@@ -221,10 +221,17 @@ class PeakShaveSim:
             - powers: log of pnet, pbought, and soc.
         '''
         total_costs = 0
+        energy_costs = 0
         prev_soc, curr_soc = 0, 0
         self.env.set_limits(lowerlim, upperlim)
         powers = []
-        for _, datarow in self.df.iterrows():
+        
+        # initialize stats collectors
+        fcalc = FluctuationCalculator()
+        fpcalc = FluctuationPeriodCalculator()
+        ppcalc = PeakPowerSumCalculator(self.df)
+
+        for idx, datarow in self.df.iterrows():
             pnet = datarow['net']
             price = datarow['price (cents/kWh)']
             _, reward, _, infos = self.env.step(0, pnet, price)
@@ -234,13 +241,30 @@ class PeakShaveSim:
                 total_costs += ((prev_soc - curr_soc) ** 2)
             if create_log:
                 powers.append((infos['pnet'], infos['pbought'], infos['soc']))
-                print(type(datarow['timestamp']), infos['pbought'])
-            total_costs += -reward
+            
+            fcalc.store(infos['pbought'])
+            fpcalc.store(datarow['timestamp'], infos['pbought'])
+            ppcalc.store(idx, upperlim, 10)
+            energy_costs += -reward
 
         capex, opex = self._compute_capex_opex()
-        total_costs += capex + opex
+        total_costs += capex + opex + energy_costs
 
-        return total_costs, powers
+        metrics = {
+            'fluctuation': fcalc.get_net_demand_fluctuation(),
+            'mean_periodic_fluctuation': fpcalc.get_mean_net_demand_fluctuation(),
+            'peak_power_sum': ppcalc.get_peak_power_sum(),
+            'peak_power_count': ppcalc.get_peak_count()
+        }
+
+        costs = {
+            'energy_costs': energy_costs,
+            'capex': capex,
+            'opex': opex,
+            'total_costs': total_costs
+        }
+
+        return costs, metrics, powers
     
     def run_dynamic_limits(self, lookahead=4, margin=.05, penalize_charging=True,
                            create_log=False):
@@ -257,6 +281,12 @@ class PeakShaveSim:
         total_costs = 0
         prev_soc, curr_soc = 0, 0
         powers = []
+        
+        # initialize stats collectors
+        fcalc = FluctuationCalculator()
+        fpcalc = FluctuationPeriodCalculator()
+        ppcalc = PeakPowerSumCalculator(self.df)
+
         for idx, datarow in self.df.iterrows():
             pmedian = self.df.iloc[idx:idx+lookahead]['net'].median()
             lowerlim = pmedian * (1 - margin)
@@ -274,10 +304,27 @@ class PeakShaveSim:
                 powers.append((infos['pnet'], infos['pbought'], infos['soc']))
             total_costs += -reward
 
+            fcalc.store(infos['pbought'])
+            fpcalc.store(infos['pbought'])
+            ppcalc.store(infos['pbought'])
+
         capex, opex = self._compute_capex_opex()
         total_costs += capex + opex
 
-        return total_costs, powers
+        metrics = {
+            'fluctuation': fcalc.get_net_demand_fluctuation(),
+            'mean_periodic_fluctuation': fpcalc.get_mean_net_demand_fluctuation(),
+            'peak_power_sum': ppcalc.get_peak_power_sum(),
+            'peak_power_count': ppcalc.get_peak_count()
+        }
+
+        costs = {
+            'capex': capex,
+            'opex': opex,
+            'total_costs': total_costs
+        }
+
+        return costs, metrics, powers
     
     def run_equalized_limits(self, lookahead=24, penalize_charging=True,
                              create_log=False):
@@ -410,8 +457,14 @@ def test_equalized_runs():
     mean_demand = df['net'].mean()
     upperlim = mean_demand * (1 + margin)
     lowerlim = mean_demand * (1 - margin)
-    total_costs, _ = sim.run_const_limits(upperlim=upperlim, lowerlim=lowerlim, penalize_charging=True, create_log=True)
-    print(f'Equalized run total costs: {total_costs}')
+    costs, metrics, powers = sim.run_const_limits(upperlim=upperlim, lowerlim=lowerlim, penalize_charging=True, create_log=True)
+    print(f'Const run energy costs: {costs["energy_costs"]:.2f} ' +
+          f'capex: {costs["capex"]:.2f} opex: {costs["opex"]:.2f} ' +
+          f'total costs: {costs["total_costs"]:.2f}')
+    print(f'Fluctuation: {metrics["fluctuation"]:.2f} ' +
+          f'Mean periodic fluctuation: {metrics["mean_periodic_fluctuation"]:.2f} ' +
+          f'Peak above upper limit sum: {metrics["peak_power_sum"]:.2f} ' +
+          f'count: {metrics["peak_power_count"]}')
 
 if __name__ == '__main__':
     test_equalized_runs()
