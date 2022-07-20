@@ -261,3 +261,9 @@ if __name__ == '__main__':
             self.assertAlmostEqual(fcalc.get_net_demand_fluctuation(), 0)
 
     unittest.main()
+
+def chop(val, to=0, delta=1e-10):
+    if to - delta <= val <= to + delta:
+        return to
+    else:
+        return val

@@ -1,6 +1,8 @@
 from abc import ABC, abstractmethod
 import os
 import yaml
+import numpy as np
+from util import chop
 
 CONFIG = None
 CONFFILE = '/batteries.yaml'
@@ -58,80 +60,90 @@ class Battery(ABC):
         # operational cost in USD/hour
         cls.opex = cls.opex * cls.capacity / 365 / 24
     
-    def step(self, Pnet, tstep=1):
-        '''Compute next state of charge. Steps 1 hour forward. Greedy algorithm.
-        params:
-            - Pnet: net power (in kW) that is used to charge this battery
-            - tstep: timestep in hour. Default is 1 hour. # TODO: not implemented yet
-        returns:
-            Pex export power that remains after charging (in kW). If
-            negative, we need to pick up more energy.'''
+    def reset(self):
+        self.soc = 0
 
-        # self-discharge (always happens)
-        self.soc = (1 - self.selfdischarge) * self.soc
+    def get_soc(self):
+        return self.soc
 
-        # if there is no net power, don't do anything
-        if Pnet == 0:
-            return Pnet
+    def get_maxsoc(self):
+        return self.maxsoc
 
-        Pex = 0
-        # if we generated net power, try to charge
-        if Pnet > 0:
+    def charge(self, pdemand, tdelta=1):
+        '''Use pdemand (or a portion of it) to charge the battery.
+        Args:
+            - pdemand: power that we want to charge the battery with (in kW)
+            - tdelta: the time period during which pdemand is applied to the battery (in h)
+        Returns:
+            - pcharge: the power that is ultimately used on the battery
+            - premain: the remaining power, `pdemand - pcharge`
+            - sdcharge: the amount of self-discharge'''
 
-            Pcharge = Pnet
-            if Pnet > self.maxcharge: # too much charging
-                Pcharge = self.maxcharge
-                Pex += Pnet - Pcharge
+        assert pdemand >= 0
 
-            energy_plus = Pcharge * self.etacharge
-            # energy_plus = Pcharge
+        # self-discharge always happens
+        sdcharge = self._selfdischarge()
 
-            # if we would overcharge
-            if self.soc + energy_plus > self.maxsoc:
-                # Pdiff = energy_plus + self.soc - self.maxsoc
+        if pdemand == 0:
+            return 0, 0, sdcharge
 
-                # charge until full
-                self.soc = self.maxsoc
-                # export remaining power
-                Pex += (energy_plus - self.maxsoc + self.soc) / self.etacharge
+        # check if pdemand exceeds the max charging power
+        pcharge = min(self.maxcharge, pdemand)
 
-                # Pex += Pdiff
-            # if we would not overcharge
-            else:
-                self.soc += energy_plus
+        # check if charging would exceed max state-of-charge
+        if self.etacharge * (pcharge * tdelta) + self.soc > self.maxsoc:
+            pcharge = (self.maxsoc - self.soc) / self.etacharge / tdelta
 
-        # we need power, we will discharge
-        else:
-            if self.soc > self.minsoc: # there is charge in the storage
+        # charge the battery
+        self.soc = self.soc + self.etacharge * (pcharge * tdelta)
+        assert self.soc <= self.maxsoc
 
-                # Poffer is the total power we can offer
-                Poffer = (self.soc - self.minsoc) * self.etadischarge
-                Pdischarge = None
+        # 
+        premain = pdemand - pcharge
+        return pcharge, premain, sdcharge
 
-                # if we need more power than we can offer
-                if abs(Pnet) > Poffer:
-                    # discharge whole battery
-                    Pdischarge = self.soc - self.minsoc
+    def discharge(self, pdemand, tdelta=1):
+        '''Try to discharge pdemand of power from the battery.
+        Args:
+            - pdemand: the amount of power we need (in kW)
+            - tdelta: the time period while we discharge the battery (in h)
+        Returns:
+            - pdischarge: power used to discharge the battery (in kW)
+            - premain: remaining power, `pdemand - pdischarge`
+            - sdcharge: the amount of self-discharge
+        '''
+        assert pdemand >= 0
 
-                # if we can satisfy the needs with discharging
-                else:
-                    # discharge enough for Pnet
-                    Pdischarge = abs(Pnet) / self.etadischarge
+        # self-discharge always happens
+        sdcharge = self._selfdischarge()
 
-                # check the if discharge exceeds the max discharge rate
-                if Pdischarge > self.maxdischarge:
-                    Pdischarge = self.maxdischarge
-                # discharge
-                self.soc -= Pdischarge
-                Pex = Pnet + Pdischarge * self.etadischarge
+        if pdemand == 0:
+            return 0, 0, sdcharge
 
-            # no charge in the storage
-            else:
-                Pex += Pnet
+        pdischarge = min(pdemand / self.etadischarge, self.maxdischarge)
 
-        if abs(Pex) < 1e-8:
-            Pex = 0
-        return Pex
+        if self.soc - (pdischarge * tdelta) < self.minsoc:
+            pdischarge = (self.soc - self.minsoc) / tdelta
+        self.soc = self.soc - self.etadischarge * (pdischarge * tdelta)
+        self.soc = chop(self.soc)
+        assert self.soc >= self.minsoc
+
+        premain = chop(pdemand - pdischarge * self.etadischarge)
+        return pdischarge, premain, sdcharge
+
+    def _selfdischarge(self):
+        sdcharge = self.selfdischarge * self.soc
+        self.soc = self.soc - sdcharge
+        return sdcharge
+
+    def do_nothing(self, tdelta=1):
+        sdcharge = self._selfdischarge()
+        return 0, 0, sdcharge
+
+    def power_to_max(self) -> float:
+        '''Returns the amount of power needed to charge up this battery to
+        the max.'''
+        return (self.maxsoc - self.soc) / self.etacharge
 
     def get_capex(self, t):
         '''Get capital expenses for the battery using the formula:
@@ -190,21 +202,118 @@ class EnergyHub:
         for _ in range(self.liion_cnt):
             self.storages.append(LiIonBattery())
     
-    def step(self, Pnet: float) -> float:
-        '''Makes a 1-hour simulation step on the batteries. Batteries should
-        be ordered according to a priority level. Currently the order is
-        supercapacitors > flywheels > Li-ion batteries.
-        params:
-            - Pnet: net power in kW
-        returns:
-            Pex export power. If positive, we export the power, if negative,
-            we take from the grid.
-        '''
+    def charge(self, pdemand, tdelta=1):
+        '''Attempts to charge batteries in the storage in order.
+        Args:
+            - pdemand: demand load in kW, the amount of power we want to store
+            - tdelta: time duration for which charging power should be applied
+                      (in hour)
+        Returns:
+            - total amount charged (in kW)
+            - total charge lost to self-discharge (in kW)'''
+
+        total_charge = 0
+        total_selfdischarge = 0
         for battery in self.storages:
-            Pnet = battery.step(Pnet)
-            if Pnet == 0:
+            pcharge, pdemand, sdcharge = battery.charge(pdemand, tdelta)
+            total_charge += pcharge
+            total_selfdischarge += sdcharge
+
+        return total_charge, total_selfdischarge
+
+    def discharge(self, pdemand, tdelta=1):
+        '''Attempts to discharge batteries in the storage in order.
+        Args:
+            - pdemand: demand load in kW, the amount of power we want to store
+            - tdelta: time duration for which charging power should be applied
+                      (in hour)
+        Returns:
+            - total amount charged (in kW)
+            - total charge lost to self-discharge (in kW)
+        '''
+        total_discharge = 0
+        total_selfdischarge = 0
+        for battery in self.storages:
+            pdischarge, pdemand, sdcharge = battery.discharge(pdemand, tdelta)
+            total_discharge += pdischarge
+            total_selfdischarge += sdcharge
+        return total_discharge, total_selfdischarge
+
+    def do_nothing(self):
+        total_selfdischarge = 0
+        for battery in self.storages:
+            _, _, sdcharge = battery.do_nothing()
+            total_selfdischarge += sdcharge
+        return 0, 0, total_selfdischarge
+
+    def get_soc(self):
+        '''Returns the total state-of-charge of all batteries (in kWh).'''
+        return sum(battery.get_soc() for battery in self.storages)
+    
+    def get_maxsoc(self):
+        '''Returns the total maximum state-of-charge of all batteries (in kWh).'''
+        return sum([battery.get_maxsoc() for battery in self.storages])
+
+    def reset(self):
+        for battery in self.storages:
+            battery.reset()
+
+    def power_to_max(self):
+        '''Returns the amount of power necessary to charge the whole ehub to max.'''
+        power = 0
+        for battery in self.storages:
+            power += battery.power_to_max()
+        return power
+
+    def compute_reserve_time(self, pnet_list):
+        '''Given a list of power demands, computes how much time would we last on
+        our batteries only. We assume that the minimum SOC is zero.
+        Args:
+            - pnet_list: list of power demands
+        Returns:
+            - hours: how many hours would the batteries last'''
+        soc_list = self.save_soc()
+
+        hours = 0
+        for pnet in pnet_list:
+            self.discharge(pnet)
+            if self.get_soc() > 0:
+                hours += 1
+            else:
                 break
-        return Pnet
+
+        self.load_soc(soc_list)
+        return hours
+    
+    def compute_full_reserve(self, pnet_list):
+        '''Given a list of power demands, computes, how long would we last if the
+        batteries were full.
+        Args:
+            - pnet_list: list of power demands
+        Returns:
+            - hours: '''
+        soc_list = self.save_soc()
+
+        for battery in self.storages:
+            battery.soc = battery.get_maxsoc()
+        hours = self.compute_reserve_time(pnet_list)
+
+        self.load_soc(soc_list)
+        return hours
+
+    def find_next_charge_time(self, price_list, treserve):
+        '''
+        Args:
+            - price_list: list of electricity prices
+            - treserve: amount of time the energyhub would last if it was full
+        '''
+        curr_price = price_list[0]
+        end = min(len(price_list), treserve + 1)
+        min_idx = np.argmin(price_list[:end])
+        return min_idx
+
+    def power_until(self, tstep, pnet_list):
+        pass
 
     def get_capex(self, t):
         return sum([battery.get_capex(t) for battery in self.storages])

@@ -1,7 +1,7 @@
 import argparse
 import gym
 import pandas as pd
-from peak_shave_battery import PeakShaveEnergyHub
+from batteries import EnergyHub
 from util import FluctuationCalculator, FluctuationPeriodCalculator, PeakPowerSumCalculator, process_file
 from util import compute_limits
 
@@ -12,7 +12,7 @@ class PeakShaveEnv(gym.Env):
         self.limdelta = config['delta_limit']
         self.upperlim = 3000
         self.lowerlim = 1000
-        self.ehub = PeakShaveEnergyHub(config)
+        self.ehub = EnergyHub(config)
 
         if self.upperlim < self.lowerlim:
             raise Exception(f'Upper limit ({self.upperlim}) is lower than ' +
@@ -279,6 +279,7 @@ class PeakShaveSim:
             - powers: log of pnet, pbought, and soc.
         '''
         total_costs = 0
+        energy_costs = 0
         prev_soc, curr_soc = 0, 0
         powers = []
         
@@ -299,17 +300,17 @@ class PeakShaveSim:
             if penalize_charging:
                 prev_soc = curr_soc
                 curr_soc = self.env.ehub.get_soc()
-                total_costs += ((prev_soc - curr_soc) ** 2)
+                energy_costs += ((prev_soc - curr_soc) ** 2)
             if create_log:
                 powers.append((infos['pnet'], infos['pbought'], infos['soc']))
-            total_costs += -reward
 
             fcalc.store(infos['pbought'])
-            fpcalc.store(infos['pbought'])
-            ppcalc.store(infos['pbought'])
+            fpcalc.store(datarow['timestamp'], infos['pbought'])
+            ppcalc.store(idx, upperlim, 10)
+            total_costs += -reward
 
         capex, opex = self._compute_capex_opex()
-        total_costs += capex + opex
+        total_costs += capex + opex + energy_costs
 
         metrics = {
             'fluctuation': fcalc.get_net_demand_fluctuation(),
@@ -319,6 +320,7 @@ class PeakShaveSim:
         }
 
         costs = {
+            'energy_costs': energy_costs,
             'capex': capex,
             'opex': opex,
             'total_costs': total_costs
@@ -329,8 +331,15 @@ class PeakShaveSim:
     def run_equalized_limits(self, lookahead=24, penalize_charging=True,
                              create_log=False):
         total_costs = 0
+        energy_costs = 0
         prev_soc, curr_soc = 0, 0
         powers = []
+        
+        # initialize stats collectors
+        fcalc = FluctuationCalculator()
+        fpcalc = FluctuationPeriodCalculator()
+        ppcalc = PeakPowerSumCalculator(self.df)
+
         for idx, datarow in self.df.iterrows():
             idxfrom = max(0, idx - lookahead)
             idxto = min(len(self.df) - 1, idx + lookahead)
@@ -347,12 +356,30 @@ class PeakShaveSim:
                 total_costs += ((prev_soc - curr_soc) ** 2)
             if create_log:
                 powers.append((infos['pnet'], lowerlim, upperlim, infos['pbought'], infos['soc']))
-            total_costs += -reward
+            energy_costs += -reward
+
+            fcalc.store(infos['pbought'])
+            fpcalc.store(datarow['timestamp'], infos['pbought'])
+            ppcalc.store(idx, upperlim)
 
         capex, opex = self._compute_capex_opex()
-        total_costs += capex + opex
+        total_costs += capex + opex + energy_costs
 
-        return total_costs, powers
+        metrics = {
+            'fluctuation': fcalc.get_net_demand_fluctuation(),
+            'mean_periodic_fluctuation': fpcalc.get_mean_net_demand_fluctuation(),
+            'peak_power_sum': ppcalc.get_peak_power_sum(),
+            'peak_power_count': ppcalc.get_peak_count()
+        }
+
+        costs = {
+            'energy_costs': energy_costs,
+            'capex': capex,
+            'opex': opex,
+            'total_costs': total_costs
+        }
+
+        return costs, metrics, powers
 
 def pkshave_constlims_objective(df: pd.DataFrame, liion_cnt: int, flywh_cnt: int,
                                 sucap_cnt: int, margin: float) -> float:
@@ -442,7 +469,7 @@ def main():
                                                 args.margin)
     print(total_costs)
 
-def test_equalized_runs():
+def test_const_runs():
     df = process_file('../data/Sub71125.csv')
     config = {
         'delta_limit': 1,
@@ -465,6 +492,49 @@ def test_equalized_runs():
           f'Mean periodic fluctuation: {metrics["mean_periodic_fluctuation"]:.2f} ' +
           f'Peak above upper limit sum: {metrics["peak_power_sum"]:.2f} ' +
           f'count: {metrics["peak_power_count"]}')
+    print()
+
+def test_dynamic_runs():
+    df = process_file('../data/Sub71125.csv')
+    config = {
+        'delta_limit': 1,
+        'LiIonBattery': 10,
+        'Flywheel': 10,
+        'Supercapacitor': 10
+    }
+    sim = PeakShaveSim(config, df)
+    costs, metrics, powers = sim.run_dynamic_limits(penalize_charging=True, create_log=True)
+
+    print(f'Dynamic run energy costs: {costs["energy_costs"]:.2f} ' +
+          f'capex: {costs["capex"]:.2f} opex: {costs["opex"]:.2f} ' +
+          f'total costs: {costs["total_costs"]:.2f}')
+    print(f'Fluctuation: {metrics["fluctuation"]:.2f} ' +
+          f'Mean periodic fluctuation: {metrics["mean_periodic_fluctuation"]:.2f} ' +
+          f'Peak above upper limit sum: {metrics["peak_power_sum"]:.2f} ' +
+          f'count: {metrics["peak_power_count"]}')
+    print()
+
+def test_equalized_runs():
+    df = process_file('../data/Sub71125.csv')
+    config = {
+        'delta_limit': 1,
+        'LiIonBattery': 10,
+        'Flywheel': 10,
+        'Supercapacitor': 10
+    }
+    sim = PeakShaveSim(config, df)
+    costs, metrics, powers = sim.run_equalized_limits(penalize_charging=True, create_log=True)
+
+    print(f'Equalized run energy costs: {costs["energy_costs"]:.2f} ' +
+          f'capex: {costs["capex"]:.2f} opex: {costs["opex"]:.2f} ' +
+          f'total costs: {costs["total_costs"]:.2f}')
+    print(f'Fluctuation: {metrics["fluctuation"]:.2f} ' +
+          f'Mean periodic fluctuation: {metrics["mean_periodic_fluctuation"]:.2f} ' +
+          f'Peak above upper limit sum: {metrics["peak_power_sum"]:.2f} ' +
+          f'count: {metrics["peak_power_count"]}')
+    print()
 
 if __name__ == '__main__':
     test_equalized_runs()
+    test_const_runs()
+    test_dynamic_runs()
