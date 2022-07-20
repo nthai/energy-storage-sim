@@ -209,106 +209,37 @@ class PeakShaveSim:
                   f'Lower limit: {self.env.lowerlim}, ' + 
                   f'Upper limit: {self.env.upperlim}')
 
-    def run_const_limits(self, lowerlim, upperlim, penalize_charging=True,
-                         create_log=False):
-        '''Runs the simulation with constant upper and lower limits.
-        Args:
-            - lowerlim: lower limit for the peak-shaving.
-            - upperlim: upper limit for the peak-shaving.
-            - create_log: bool value whether to create log of power values.
-        Returns:
-            - total_costs: total cost accumulated during the simulation.
-            - powers: log of pnet, pbought, and soc.
-        '''
-        total_costs = 0
-        energy_costs = 0
+    def _get_limits(self, **kwargs):
+        raise NotImplementedError()
+
+    def run(self, **kwargs):
+        energy_costs, total_costs = 0, 0
         prev_soc, curr_soc = 0, 0
-        self.env.set_limits(lowerlim, upperlim)
         powers = []
-        
-        # initialize stats collectors
+
         fcalc = FluctuationCalculator()
         fpcalc = FluctuationPeriodCalculator()
         ppcalc = PeakPowerSumCalculator(self.df)
 
         for idx, datarow in self.df.iterrows():
+            lowerlim, upperlim = self._get_limits(idx=idx, datarow=datarow, **kwargs)
+            self.env.set_limits(lowerlim, upperlim)
+
             pnet = datarow['net']
             price = datarow['price (cents/kWh)']
             _, reward, _, infos = self.env.step(0, pnet, price)
-            if penalize_charging:
+            if kwargs['penalize_charging']:
                 prev_soc = curr_soc
                 curr_soc = self.env.ehub.get_soc()
                 total_costs += ((prev_soc - curr_soc) ** 2)
-            if create_log:
+            if kwargs['create_log']:
                 powers.append((infos['pnet'], infos['pbought'], infos['soc']))
             
             fcalc.store(infos['pbought'])
             fpcalc.store(datarow['timestamp'], infos['pbought'])
             ppcalc.store(idx, upperlim, 10)
             energy_costs += -reward
-
-        capex, opex = self._compute_capex_opex()
-        total_costs += capex + opex + energy_costs
-
-        metrics = {
-            'fluctuation': fcalc.get_net_demand_fluctuation(),
-            'mean_periodic_fluctuation': fpcalc.get_mean_net_demand_fluctuation(),
-            'peak_power_sum': ppcalc.get_peak_power_sum(),
-            'peak_power_count': ppcalc.get_peak_count()
-        }
-
-        costs = {
-            'energy_costs': energy_costs,
-            'capex': capex,
-            'opex': opex,
-            'total_costs': total_costs
-        }
-
-        return costs, metrics, powers
-    
-    def run_dynamic_limits(self, lookahead=4, margin=.05, penalize_charging=True,
-                           create_log=False):
-        '''Runs a simulation where the upper and lower limits for peak-shaving changes
-        dynamically based on the median of future net power demand values.
-        Args:
-            - lookahead: the amount of future power values considered for the median.
-            - margin: distance of upper and lower limits from the median.
-            - create_log: bool value whether to create log of power values.
-        Returns:
-            - total_costs: total cost accumulated during simulation.
-            - powers: log of pnet, pbought, and soc.
-        '''
-        total_costs = 0
-        energy_costs = 0
-        prev_soc, curr_soc = 0, 0
-        powers = []
         
-        # initialize stats collectors
-        fcalc = FluctuationCalculator()
-        fpcalc = FluctuationPeriodCalculator()
-        ppcalc = PeakPowerSumCalculator(self.df)
-
-        for idx, datarow in self.df.iterrows():
-            pmedian = self.df.iloc[idx:idx+lookahead]['net'].median()
-            lowerlim = pmedian * (1 - margin)
-            upperlim = pmedian * (1 + margin)
-            self.env.set_limits(lowerlim, upperlim)
-
-            pnet = datarow['net']
-            price = datarow['price (cents/kWh)']
-            _, reward, _, infos = self.env.step(0, pnet, price)
-            if penalize_charging:
-                prev_soc = curr_soc
-                curr_soc = self.env.ehub.get_soc()
-                energy_costs += ((prev_soc - curr_soc) ** 2)
-            if create_log:
-                powers.append((infos['pnet'], infos['pbought'], infos['soc']))
-
-            fcalc.store(infos['pbought'])
-            fpcalc.store(datarow['timestamp'], infos['pbought'])
-            ppcalc.store(idx, upperlim, 10)
-            total_costs += -reward
-
         capex, opex = self._compute_capex_opex()
         total_costs += capex + opex + energy_costs
 
@@ -327,59 +258,34 @@ class PeakShaveSim:
         }
 
         return costs, metrics, powers
-    
-    def run_equalized_limits(self, lookahead=24, penalize_charging=True,
-                             create_log=False):
-        total_costs = 0
-        energy_costs = 0
-        prev_soc, curr_soc = 0, 0
-        powers = []
+
+class ConstLimPeakShaveSim(PeakShaveSim):
+    def _get_limits(self, **kwargs):
+        return kwargs['lowerlim'], kwargs['upperlim']
+
+class DynamicLimPeakShaveSim(PeakShaveSim):
+    def _get_limits(self, **kwargs):
+        idx = kwargs['idx']
+        lookahead = kwargs['lookahead']
+        margin = kwargs['margin']
+
+        pmedian = self.df.iloc[idx:idx+lookahead]['net'].median()
+        lowerlim = pmedian * (1 - margin)
+        upperlim = pmedian * (1 + margin)
+        return lowerlim, upperlim
+
+class EqualizedLimPeakShaveSim(PeakShaveSim):
+
+    def _get_limits(self, **kwargs):
+        idx = kwargs['idx']
+        lookahead = kwargs['lookahead']
+
+        idxfrom = max(0, idx - lookahead)
+        idxto = min(len(self.df) - 1, idx + lookahead)
+        next_pnets = self.df.iloc[idxfrom:idxto]['net']
         
-        # initialize stats collectors
-        fcalc = FluctuationCalculator()
-        fpcalc = FluctuationPeriodCalculator()
-        ppcalc = PeakPowerSumCalculator(self.df)
-
-        for idx, datarow in self.df.iterrows():
-            idxfrom = max(0, idx - lookahead)
-            idxto = min(len(self.df) - 1, idx + lookahead)
-            next_pnets = self.df.iloc[idxfrom:idxto]['net']
-            lowerlim, upperlim = compute_limits(next_pnets)
-            self.env.set_limits(lowerlim, upperlim)
-
-            pnet = datarow['net']
-            price = datarow['price (cents/kWh)']
-            _, reward, _, infos = self.env.step(0, pnet, price)
-            if penalize_charging:
-                prev_soc = curr_soc
-                curr_soc = self.env.ehub.get_soc()
-                total_costs += ((prev_soc - curr_soc) ** 2)
-            if create_log:
-                powers.append((infos['pnet'], lowerlim, upperlim, infos['pbought'], infos['soc']))
-            energy_costs += -reward
-
-            fcalc.store(infos['pbought'])
-            fpcalc.store(datarow['timestamp'], infos['pbought'])
-            ppcalc.store(idx, upperlim)
-
-        capex, opex = self._compute_capex_opex()
-        total_costs += capex + opex + energy_costs
-
-        metrics = {
-            'fluctuation': fcalc.get_net_demand_fluctuation(),
-            'mean_periodic_fluctuation': fpcalc.get_mean_net_demand_fluctuation(),
-            'peak_power_sum': ppcalc.get_peak_power_sum(),
-            'peak_power_count': ppcalc.get_peak_count()
-        }
-
-        costs = {
-            'energy_costs': energy_costs,
-            'capex': capex,
-            'opex': opex,
-            'total_costs': total_costs
-        }
-
-        return costs, metrics, powers
+        lowerlim, upperlim = compute_limits(next_pnets)
+        return lowerlim, upperlim
 
 def pkshave_constlims_objective(df: pd.DataFrame, liion_cnt: int, flywh_cnt: int,
                                 sucap_cnt: int, margin: float) -> float:
@@ -394,7 +300,7 @@ def pkshave_constlims_objective(df: pd.DataFrame, liion_cnt: int, flywh_cnt: int
         - margin: determines the size of margin of the upper and lower limits from
           from the mean, i.e., (upperlim - mean) == (mean - lowerlim) == margin
     Returns:
-        - total_costs: amount spent on buying electricity from the grid.
+        - costs: dict containing amount spent on buying electricity from the grid.
     '''
     mean_demand = df['net'].mean()
     upperlim = mean_demand * (1 + margin)
@@ -406,9 +312,9 @@ def pkshave_constlims_objective(df: pd.DataFrame, liion_cnt: int, flywh_cnt: int
         'Flywheel': flywh_cnt,
         'Supercapacitor': sucap_cnt
     }
-    sim = PeakShaveSim(config, df)
-    total_costs, _ = sim.run_const_limits(lowerlim, upperlim)
-    return total_costs
+    sim = ConstLimPeakShaveSim(config, df)
+    costs, _, _ = sim.run(lowerlim, upperlim)
+    return costs
 
 def pkshave_dinlims_objective(df: pd.DataFrame, liion_cnt: int, flywh_cnt: int,
                               sucap_cnt: int, lookahead: int, margin: float) -> float:
@@ -424,7 +330,7 @@ def pkshave_dinlims_objective(df: pd.DataFrame, liion_cnt: int, flywh_cnt: int,
         - margin: determines the size of margin of the upper and lower limits from
           from the mean, i.e., (upperlim - mean) == (mean - lowerlim) == margin
     Returns:
-        - total_costs: amount spent on buying electricity from the grid.
+        - costs: dict containing amount spent on buying electricity from the grid.
     '''
     config = {
         'delta_limit': 1,
@@ -432,9 +338,9 @@ def pkshave_dinlims_objective(df: pd.DataFrame, liion_cnt: int, flywh_cnt: int,
         'Flywheel': flywh_cnt,
         'Supercapacitor': sucap_cnt
     }
-    sim = PeakShaveSim(config, df)
-    total_costs, _ = sim.run_dynamic_limits(lookahead, margin)
-    return total_costs
+    sim = DynamicLimPeakShaveSim(config, df)
+    costs, _, _ = sim.run(lookahead, margin)
+    return costs
 
 def get_args():
     parser = argparse.ArgumentParser()
@@ -477,14 +383,14 @@ def test_const_runs():
         'Flywheel': 10,
         'Supercapacitor': 10
     }
-    sim = PeakShaveSim(config, df)
+    sim = ConstLimPeakShaveSim(config, df)
     # total_costs, _ = sim.run_equalized_limits(penalize_charging=True, create_log=True)
     
     margin = .02
     mean_demand = df['net'].mean()
     upperlim = mean_demand * (1 + margin)
     lowerlim = mean_demand * (1 - margin)
-    costs, metrics, powers = sim.run_const_limits(upperlim=upperlim, lowerlim=lowerlim, penalize_charging=True, create_log=True)
+    costs, metrics, powers = sim.run(upperlim=upperlim, lowerlim=lowerlim, penalize_charging=True, create_log=True)
     print(f'Const run energy costs: {costs["energy_costs"]:.2f} ' +
           f'capex: {costs["capex"]:.2f} opex: {costs["opex"]:.2f} ' +
           f'total costs: {costs["total_costs"]:.2f}')
@@ -502,8 +408,8 @@ def test_dynamic_runs():
         'Flywheel': 10,
         'Supercapacitor': 10
     }
-    sim = PeakShaveSim(config, df)
-    costs, metrics, powers = sim.run_dynamic_limits(penalize_charging=True, create_log=True)
+    sim = DynamicLimPeakShaveSim(config, df)
+    costs, metrics, powers = sim.run(lookahead=4, margin=.05, penalize_charging=True, create_log=True)
 
     print(f'Dynamic run energy costs: {costs["energy_costs"]:.2f} ' +
           f'capex: {costs["capex"]:.2f} opex: {costs["opex"]:.2f} ' +
@@ -522,8 +428,8 @@ def test_equalized_runs():
         'Flywheel': 10,
         'Supercapacitor': 10
     }
-    sim = PeakShaveSim(config, df)
-    costs, metrics, powers = sim.run_equalized_limits(penalize_charging=True, create_log=True)
+    sim = EqualizedLimPeakShaveSim(config, df)
+    costs, metrics, powers = sim.run(lookahead=24, penalize_charging=True, create_log=True)
 
     print(f'Equalized run energy costs: {costs["energy_costs"]:.2f} ' +
           f'capex: {costs["capex"]:.2f} opex: {costs["opex"]:.2f} ' +
