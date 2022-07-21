@@ -263,14 +263,16 @@ class PeakShaveSim:
 class ConstLimPeakShaveSim(PeakShaveSim):
     def __init__(self, config, df=None):
         super().__init__(config, df)
-        
-        margin = .02
-        mean_demand = df['net'].mean()
-        self.upperlim = mean_demand * (1 + margin)
-        self.lowerlim = mean_demand * (1 - margin)
 
     def _get_limits(self, **kwargs):
         return self.lowerlim, self.upperlim
+    
+    def run(self, **kwargs):
+        self.margin = kwargs['margin']
+        mean_demand = self.df['net'].mean()
+        self.upperlim = mean_demand * (1 + self.margin)
+        self.lowerlim = mean_demand * (1 - self.margin)
+        return super().run(**kwargs)
 
 class DynamicLimPeakShaveSim(PeakShaveSim):
     def _get_limits(self, **kwargs):
@@ -284,7 +286,6 @@ class DynamicLimPeakShaveSim(PeakShaveSim):
         return lowerlim, upperlim
 
 class EqualizedLimPeakShaveSim(PeakShaveSim):
-
     def _get_limits(self, **kwargs):
         idx = kwargs['idx']
         lookahead = kwargs['lookahead']
@@ -296,48 +297,17 @@ class EqualizedLimPeakShaveSim(PeakShaveSim):
         lowerlim, upperlim = compute_limits(next_pnets)
         return lowerlim, upperlim
 
-def pkshave_constlims_objective(df: pd.DataFrame, liion_cnt: int, flywh_cnt: int,
-                                sucap_cnt: int, margin: float) -> float:
-    '''Objective for the peak-shave optimization problem. Upper and lower limits are
-    set once at the start of the algorithm.
+def objective(SimClass: Type[PeakShaveSim], df: pd.DataFrame, liion_cnt: int,
+              flywh_cnt: int, sucap_cnt: int, **run_config):
+    '''Objective function for the peak-shave optimization problem.
     Args:
-        - df: pandas.DataFrame containing the price data and the net power under
-            the 'net' key.
-        - liion_cnt: number of LiIon batteries
-        - flywh_cnt: number of flywheel batteries
-        - sucap_cnt: number of supercapacitors
-        - margin: determines the size of margin of the upper and lower limits from
-          from the mean, i.e., (upperlim - mean) == (mean - lowerlim) == margin
-    Returns:
-        - costs: dict containing amount spent on buying electricity from the grid.
-    '''
-    mean_demand = df['net'].mean()
-    upperlim = mean_demand * (1 + margin)
-    lowerlim = mean_demand * (1 - margin)
-
-    config = {
-        'delta_limit': 1,
-        'LiIonBattery': liion_cnt,
-        'Flywheel': flywh_cnt,
-        'Supercapacitor': sucap_cnt
-    }
-    sim = ConstLimPeakShaveSim(config, df)
-    costs, _, _ = sim.run(lowerlim, upperlim)
-    return costs
-
-def pkshave_dinlims_objective(df: pd.DataFrame, liion_cnt: int, flywh_cnt: int,
-                              sucap_cnt: int, lookahead: int, margin: float) -> float:
-    '''Objective for the peak-shave optimization problem. Upper and lower limits
-    change dynamically during the run.
-    Args:
+        - SimClass: class of simulation type to run. E.g.: ConstLimPeakShaveSim
         - df: pandas.DataFrame containing the price data and the net power data
             under the `net` key.
         - liion_cnt: number of LiIon batteries
         - flywh_cnt: number of flywheel batteries
         - sucap_cnt: number of supercapacitors
-        - lookahead: number of future values to consider for the median
-        - margin: determines the size of margin of the upper and lower limits from
-          from the mean, i.e., (upperlim - mean) == (mean - lowerlim) == margin
+        - **run_config: value fed to the class's run method.
     Returns:
         - costs: dict containing amount spent on buying electricity from the grid.
     '''
@@ -347,8 +317,8 @@ def pkshave_dinlims_objective(df: pd.DataFrame, liion_cnt: int, flywh_cnt: int,
         'Flywheel': flywh_cnt,
         'Supercapacitor': sucap_cnt
     }
-    sim = DynamicLimPeakShaveSim(config, df)
-    costs, _, _ = sim.run(lookahead, margin)
+    sim = SimClass(config, df)
+    costs, _, _ = sim.run(**run_config)
     return costs
 
 def get_args():
@@ -370,31 +340,18 @@ def get_args():
 
     return args
 
-def main2():
-    args = get_args()
-    fname = '../data/' + args.datafile
-
-    df = process_file(fname)
-    if args.limit_mode == 'const':
-        total_costs = pkshave_constlims_objective(df, args.liion, args.flywheel,
-                                                  args.supercap, args.margin)
-    elif args.limit_mode == 'dyn':
-        total_costs = pkshave_dinlims_objective(df, args.liion, args.flywheel,
-                                                args.supercap, args.lookahead,
-                                                args.margin)
-    print(total_costs)
-
 def test_sim(SimClass: Type[PeakShaveSim], run_type: str, **sim_run_config):
     df = process_file('../data/Sub71125.csv')
     config = {
         'delta_limit': 1,
         'LiIonBattery': 10,
         'Flywheel': 10,
-        'Supercapacitor': 10
+        'Supercapacitor': 10,
     }
     sim = SimClass(config, df)
-    costs, metrics, powers = sim.run(**sim_run_config)
+    costs, metrics, _ = sim.run(**sim_run_config)
     
+    print()
     print(f'{run_type} run energy costs: {costs["energy_costs"]:.2f} ' +
           f'capex: {costs["capex"]:.2f} opex: {costs["opex"]:.2f} ' +
           f'total costs: {costs["total_costs"]:.2f}')
@@ -402,12 +359,14 @@ def test_sim(SimClass: Type[PeakShaveSim], run_type: str, **sim_run_config):
           f'Mean periodic fluctuation: {metrics["mean_periodic_fluctuation"]:.2f} ' +
           f'Peak above upper limit sum: {metrics["peak_power_sum"]:.2f} ' +
           f'count: {metrics["peak_power_count"]}')
-    print()
 
 def main():
-    test_sim(ConstLimPeakShaveSim, 'Const', penalize_charging=True, create_log=True)
-    test_sim(DynamicLimPeakShaveSim, 'Dynamic', lookahead=24, margin=.05, penalize_charging=True, create_log=True)
-    test_sim(EqualizedLimPeakShaveSim, 'Equalized', lookahead=24, penalize_charging=True, create_log=True)
+    test_sim(ConstLimPeakShaveSim, 'Const', margin=.02, penalize_charging=True,
+             create_log=True)
+    test_sim(DynamicLimPeakShaveSim, 'Dynamic', lookahead=24, margin=.05,
+             penalize_charging=True, create_log=True)
+    test_sim(EqualizedLimPeakShaveSim, 'Equalized', lookahead=24,
+             penalize_charging=True, create_log=True)
 
 if __name__ == '__main__':
     main()
