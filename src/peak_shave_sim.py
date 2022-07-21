@@ -1,4 +1,5 @@
 import argparse
+from typing import Type
 import gym
 import pandas as pd
 from batteries import EnergyHub
@@ -260,8 +261,16 @@ class PeakShaveSim:
         return costs, metrics, powers
 
 class ConstLimPeakShaveSim(PeakShaveSim):
+    def __init__(self, config, df=None):
+        super().__init__(config, df)
+        
+        margin = .02
+        mean_demand = df['net'].mean()
+        self.upperlim = mean_demand * (1 + margin)
+        self.lowerlim = mean_demand * (1 - margin)
+
     def _get_limits(self, **kwargs):
-        return kwargs['lowerlim'], kwargs['upperlim']
+        return self.lowerlim, self.upperlim
 
 class DynamicLimPeakShaveSim(PeakShaveSim):
     def _get_limits(self, **kwargs):
@@ -361,7 +370,7 @@ def get_args():
 
     return args
 
-def main():
+def main2():
     args = get_args()
     fname = '../data/' + args.datafile
 
@@ -375,7 +384,7 @@ def main():
                                                 args.margin)
     print(total_costs)
 
-def test_const_runs():
+def test_sim(SimClass: Type[PeakShaveSim], run_type: str, **sim_run_config):
     df = process_file('../data/Sub71125.csv')
     config = {
         'delta_limit': 1,
@@ -383,15 +392,10 @@ def test_const_runs():
         'Flywheel': 10,
         'Supercapacitor': 10
     }
-    sim = ConstLimPeakShaveSim(config, df)
-    # total_costs, _ = sim.run_equalized_limits(penalize_charging=True, create_log=True)
+    sim = SimClass(config, df)
+    costs, metrics, powers = sim.run(**sim_run_config)
     
-    margin = .02
-    mean_demand = df['net'].mean()
-    upperlim = mean_demand * (1 + margin)
-    lowerlim = mean_demand * (1 - margin)
-    costs, metrics, powers = sim.run(upperlim=upperlim, lowerlim=lowerlim, penalize_charging=True, create_log=True)
-    print(f'Const run energy costs: {costs["energy_costs"]:.2f} ' +
+    print(f'{run_type} run energy costs: {costs["energy_costs"]:.2f} ' +
           f'capex: {costs["capex"]:.2f} opex: {costs["opex"]:.2f} ' +
           f'total costs: {costs["total_costs"]:.2f}')
     print(f'Fluctuation: {metrics["fluctuation"]:.2f} ' +
@@ -400,47 +404,10 @@ def test_const_runs():
           f'count: {metrics["peak_power_count"]}')
     print()
 
-def test_dynamic_runs():
-    df = process_file('../data/Sub71125.csv')
-    config = {
-        'delta_limit': 1,
-        'LiIonBattery': 10,
-        'Flywheel': 10,
-        'Supercapacitor': 10
-    }
-    sim = DynamicLimPeakShaveSim(config, df)
-    costs, metrics, powers = sim.run(lookahead=4, margin=.05, penalize_charging=True, create_log=True)
-
-    print(f'Dynamic run energy costs: {costs["energy_costs"]:.2f} ' +
-          f'capex: {costs["capex"]:.2f} opex: {costs["opex"]:.2f} ' +
-          f'total costs: {costs["total_costs"]:.2f}')
-    print(f'Fluctuation: {metrics["fluctuation"]:.2f} ' +
-          f'Mean periodic fluctuation: {metrics["mean_periodic_fluctuation"]:.2f} ' +
-          f'Peak above upper limit sum: {metrics["peak_power_sum"]:.2f} ' +
-          f'count: {metrics["peak_power_count"]}')
-    print()
-
-def test_equalized_runs():
-    df = process_file('../data/Sub71125.csv')
-    config = {
-        'delta_limit': 1,
-        'LiIonBattery': 10,
-        'Flywheel': 10,
-        'Supercapacitor': 10
-    }
-    sim = EqualizedLimPeakShaveSim(config, df)
-    costs, metrics, powers = sim.run(lookahead=24, penalize_charging=True, create_log=True)
-
-    print(f'Equalized run energy costs: {costs["energy_costs"]:.2f} ' +
-          f'capex: {costs["capex"]:.2f} opex: {costs["opex"]:.2f} ' +
-          f'total costs: {costs["total_costs"]:.2f}')
-    print(f'Fluctuation: {metrics["fluctuation"]:.2f} ' +
-          f'Mean periodic fluctuation: {metrics["mean_periodic_fluctuation"]:.2f} ' +
-          f'Peak above upper limit sum: {metrics["peak_power_sum"]:.2f} ' +
-          f'count: {metrics["peak_power_count"]}')
-    print()
+def main():
+    test_sim(ConstLimPeakShaveSim, 'Const', penalize_charging=True, create_log=True)
+    test_sim(DynamicLimPeakShaveSim, 'Dynamic', lookahead=24, margin=.05, penalize_charging=True, create_log=True)
+    test_sim(EqualizedLimPeakShaveSim, 'Equalized', lookahead=24, penalize_charging=True, create_log=True)
 
 if __name__ == '__main__':
-    test_equalized_runs()
-    test_const_runs()
-    test_dynamic_runs()
+    main()
