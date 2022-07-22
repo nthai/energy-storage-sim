@@ -34,14 +34,16 @@ class GreedySim():
         return capex, opex
 
     def run(self, **kwargs):
+        verbose = False if 'verbose' not in kwargs else True
+
         energy_cost = 0
-        powers = None
+        powers = []
 
         fcalc = FluctuationCalculator()
         fpcalc = FluctuationPeriodCalculator()
 
         for idx, datarow in self.df.iterrows():
-            if __debug__:
+            if __debug__ and verbose:
                 print(f'{idx:3d} {datarow["net"]:5.1f}')
 
             pbought = 0
@@ -50,14 +52,14 @@ class GreedySim():
             # find how much time we could last with current battery charge
             treserve = self.ehub.compute_reserve_time(pnets)
 
-            if __debug__:
+            if __debug__ and verbose:
                 print(f'\ttreserve: {treserve}')
 
             # find the lowest electricity price within the given time frame
             prices = self.df.iloc[idx:idx+treserve+1]['price (cents/kWh)']
             min_id = np.argmin(prices)
             
-            if __debug__:
+            if __debug__ and verbose:
                 print(f'\telectricity prices: {list(prices)}')
                 print(f'\tlowest electricity price at: {min_id}')
 
@@ -69,16 +71,19 @@ class GreedySim():
                 pbought += pneed * prices.iloc[0] / 100
                 # use it to charge the ehub
                 self.ehub.charge(pneed)
-                if __debug__:
+                if __debug__ and verbose:
                     print(f'\tWe need to charge!')
                     print(f'\tcharge {pneed:.2f} kWh!')
 
             # discharge
             self.ehub.discharge(datarow['net'])
-            if __debug__:
+            if __debug__ and verbose:
                 print(f'\tdischarge: {datarow["net"]:.2f}')
                 print(f'\tnew soc: {self.ehub.get_soc():.2f}')
             
+            powers.append((datarow['timestamp'], datarow['net'], pbought,
+                           self.ehub.get_soc()))
+
             fcalc.store(pbought)
             fpcalc.store(datarow['timestamp'], pbought)
             energy_cost += pbought

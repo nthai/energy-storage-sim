@@ -72,7 +72,7 @@ class PeakShaveEnv(gym.Env):
         elif act_upper == 2:
             self.upperlim += self.limdelta
 
-    def step(self, action: int, pnet: float, price: float):
+    def step(self, action: int, pnet: float, price: float, verbose=False):
         '''Makes a simulation step by charging/discharging the batteries based on the
         net power demand and calculates the cost paid for the energy taken from the
         grid.
@@ -92,7 +92,7 @@ class PeakShaveEnv(gym.Env):
         infos = {'pnet': pnet}
         report = ''
 
-        if __debug__:
+        if __debug__ and verbose:
             report += f'Demand: {pnet:8.2f} kW, '
 
         self._execute_action(action)
@@ -104,7 +104,7 @@ class PeakShaveEnv(gym.Env):
             total_discharge, total_selfdischarge = self.ehub.discharge(pdischarge)
             pbought = pnet - total_discharge
 
-            if __debug__:
+            if __debug__ and verbose:
                 report += (f'Purchased: {pbought:8.2f} kW, ')
                 report += (f'Discharged: {total_discharge:6.2f} kW, ' +
                            f'SelfD: {total_selfdischarge:6.2f} kW ')
@@ -115,7 +115,7 @@ class PeakShaveEnv(gym.Env):
             total_charge, total_selfdischarge = self.ehub.charge(pcharge)
             pbought = pnet + total_charge
 
-            if __debug__:
+            if __debug__ and verbose:
                 report += (f'Purchased: {pbought:8.2f} kW, ')
                 report += (f'Charged:    {total_charge:6.2f} kW, ' +
                            f'SelfD: {total_selfdischarge:6.2f} kW ')
@@ -124,7 +124,7 @@ class PeakShaveEnv(gym.Env):
             _, _, total_selfdischarge = self.ehub.do_nothing()
             pbought = pnet
 
-            if __debug__:
+            if __debug__ and verbose:
                 report += (f'Purchased: {pbought:8.2f} kW, ')
                 report += (f'No charge/discharge,   ' +
                            f'SelfD: {total_selfdischarge:6.2f} kW ')
@@ -134,7 +134,7 @@ class PeakShaveEnv(gym.Env):
         cost = price * pbought / 100
         reward = -cost
 
-        if __debug__:
+        if __debug__ and verbose:
             maxsoc = self.ehub.get_maxsoc()
             soc = infos['soc']
             if len(self.ehub.storages) > 0:
@@ -234,7 +234,8 @@ class PeakShaveSim:
                 curr_soc = self.env.ehub.get_soc()
                 total_costs += ((prev_soc - curr_soc) ** 2)
             if kwargs['create_log']:
-                powers.append((infos['pnet'], infos['pbought'], infos['soc']))
+                powers.append((datarow['timestamp'], infos['pnet'], infos['pbought'],
+                               infos['soc'], lowerlim, upperlim))
             
             fcalc.store(infos['pbought'])
             fpcalc.store(datarow['timestamp'], infos['pbought'])
