@@ -261,8 +261,9 @@ class PeakShaveSim:
         return costs, metrics, powers
 
 class ConstLimPeakShaveSim(PeakShaveSim):
-    def __init__(self, config, df=None):
-        super().__init__(config, df)
+    '''Peak-shave simulation with constant limits.
+    Adjustable args:
+        - margin: Margin from the mean of the data'''
 
     def _get_limits(self, **kwargs):
         return self.lowerlim, self.upperlim
@@ -275,6 +276,14 @@ class ConstLimPeakShaveSim(PeakShaveSim):
         return super().run(**kwargs)
 
 class DynamicLimPeakShaveSim(PeakShaveSim):
+    '''Peak-shave simulation with dynamically changing upper and lower limits. The
+    algorithm looks ahead into the future (e.g. through prediction) and determines
+    the upper and lower limits that are a margin distance from the median.
+    Adjustable parameters:
+        - lookahead: the amount of future steps used to determine the median.
+        - margin: distance of the upper and lower limit from the median in percentage.
+    '''
+
     def _get_limits(self, **kwargs):
         idx = kwargs['idx']
         lookahead = kwargs['lookahead']
@@ -286,15 +295,26 @@ class DynamicLimPeakShaveSim(PeakShaveSim):
         return lowerlim, upperlim
 
 class EqualizedLimPeakShaveSim(PeakShaveSim):
+    '''Peak-shave simulation with dynamically changing upper and lower limits. The
+    algorithm looks ahead into the future (e.g. through prediction) and computes the
+    upper and lower limits with a given margin distance for which the area above the
+    upper limit equals the area below the lowerlimit. The size of margin is set to
+    be 1/3.
+    Adjustable parameters:
+        - lookahead: the amount of future steps used to compute the limits.
+        - tolerance: the limit computing algorithm stops if the difference between
+            the areas under the curve is below the tolerance level (in kWh).
+    '''
     def _get_limits(self, **kwargs):
         idx = kwargs['idx']
         lookahead = kwargs['lookahead']
+        tolerance = 2 if 'tolerance' not in kwargs else kwargs['tolerance']
 
         idxfrom = max(0, idx - lookahead)
         idxto = min(len(self.df) - 1, idx + lookahead)
         next_pnets = self.df.iloc[idxfrom:idxto]['net']
         
-        lowerlim, upperlim = compute_limits(next_pnets)
+        lowerlim, upperlim = compute_limits(next_pnets, tolerance)
         return lowerlim, upperlim
 
 def objective(SimClass: Type[PeakShaveSim], df: pd.DataFrame, liion_cnt: int,
@@ -318,13 +338,13 @@ def objective(SimClass: Type[PeakShaveSim], df: pd.DataFrame, liion_cnt: int,
         'Supercapacitor': sucap_cnt
     }
     sim = SimClass(config, df)
-    costs, _, _ = sim.run(**run_config)
-    return costs
+    costs, metrics, _ = sim.run(**run_config)
+    return costs, metrics
 
-def get_args():
+def get_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument('--limit_mode', type=str, default='const')
-    parser.add_argument('--datafile', type=str, default='short.csv')
+    parser.add_argument('--datafile', type=str, default='../data/Sub71125.csv')
     parser.add_argument('--liion', type=int, default=3)
     parser.add_argument('--flywheel', type=int, default=3)
     parser.add_argument('--supercap', type=int, default=3)
@@ -360,13 +380,24 @@ def test_sim(SimClass: Type[PeakShaveSim], run_type: str, **sim_run_config):
           f'Peak above upper limit sum: {metrics["peak_power_sum"]:.2f} ' +
           f'count: {metrics["peak_power_count"]}')
 
+def test_objective(SimClass: Type[PeakShaveSim], **run_config):
+    args = get_args()
+    df = process_file(args.datafile)
+
+    costs, metrics = objective(SimClass, df, args.liion, args.flywheel, args.supercap,
+                      **run_config)
+    print(costs)
+    print(metrics)
+    print()
+
 def main():
-    test_sim(ConstLimPeakShaveSim, 'Const', margin=.02, penalize_charging=True,
-             create_log=True)
-    test_sim(DynamicLimPeakShaveSim, 'Dynamic', lookahead=24, margin=.05,
-             penalize_charging=True, create_log=True)
-    test_sim(EqualizedLimPeakShaveSim, 'Equalized', lookahead=24,
-             penalize_charging=True, create_log=True)
+    test_sim(ConstLimPeakShaveSim, 'Const', margin=.02, penalize_charging=True, create_log=True)
+    test_sim(DynamicLimPeakShaveSim, 'Dynamic', lookahead=24, margin=.05, penalize_charging=True, create_log=True)
+    test_sim(EqualizedLimPeakShaveSim, 'Equalized', lookahead=24, penalize_charging=True, create_log=True)
+
+    test_objective(ConstLimPeakShaveSim, margin=.02, penalize_charging=True, create_log=True)
+    test_objective(DynamicLimPeakShaveSim, lookahead=24, margin=.05, penalize_charging=True, create_log=True)
+    test_objective(EqualizedLimPeakShaveSim, lookahead=24, penalize_charging=True, create_log=True)
 
 if __name__ == '__main__':
     main()

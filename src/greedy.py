@@ -1,7 +1,10 @@
 import numpy as np
 from concurrent.futures import process
-from peak_shave_battery import PeakShaveEnergyHub
+from batteries import EnergyHub
 from util import process_file
+from util import FluctuationCalculator
+from util import FluctuationPeriodCalculator
+from util import PeakPowerSumCalculator
 import os
 
 FILEPATH = os.path.dirname(os.path.abspath(__file__))
@@ -11,7 +14,7 @@ class GreedySim():
         super().__init__()
 
         self.df = process_file(config['datafile']) if df is None else df
-        self.ehub = PeakShaveEnergyHub(config)
+        self.ehub = EnergyHub(config)
         self.reset()
 
     def reset(self):
@@ -30,8 +33,13 @@ class GreedySim():
 
         return capex, opex
 
-    def run(self):
+    def run(self, **kwargs):
         energy_cost = 0
+        powers = None
+
+        fcalc = FluctuationCalculator()
+        fpcalc = FluctuationPeriodCalculator()
+
         for idx, datarow in self.df.iterrows():
             if __debug__:
                 print(f'{idx:3d} {datarow["net"]:5.1f}')
@@ -70,15 +78,24 @@ class GreedySim():
             if __debug__:
                 print(f'\tdischarge: {datarow["net"]:.2f}')
                 print(f'\tnew soc: {self.ehub.get_soc():.2f}')
+            
+            fcalc.store(pbought)
+            fpcalc.store(datarow['timestamp'], pbought)
             energy_cost += pbought
         capex, opex = self._compute_capex_opex()
+
+        metrics = {
+            'fluctuation': fcalc.get_net_demand_fluctuation(),
+            'mean_periodic_fluctuation': fpcalc.get_mean_net_demand_fluctuation()
+        }
+
         costs = {
-            'energy_cost': energy_cost,
+            'energy_costs': energy_cost,
             'capex': capex,
             'opex': opex,
             'total_costs': energy_cost + capex + opex
         }
-        return costs
+        return costs, metrics, powers
 
 def test_greedy_sim():
     config = {
@@ -89,7 +106,7 @@ def test_greedy_sim():
     }
 
     sim = GreedySim(config)
-    costs = sim.run()
+    costs, metrics = sim.run()
     print(costs)
 
 if __name__ == '__main__':

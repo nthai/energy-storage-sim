@@ -24,7 +24,10 @@ class FluctuationCalculator:
         self.prev_value = value
 
     def get_net_demand_fluctuation(self) -> float:
-        return self.diff_total / (self.total / self.count)
+        if self.total == 0:
+            return 0
+        else:
+            return self.diff_total / (self.total / self.count)
 
 class FluctuationPeriodCalculator:
     '''Computes the mean net power fluctuation, by computing the power
@@ -48,7 +51,9 @@ class FluctuationPeriodCalculator:
         self.prev_value = value
 
         if timestamp.hour == 23:
-            fluctuation = self.diff_total / (self.total / self.count)
+            fluctuation = 0
+            if self.total != 0:
+                fluctuation = self.diff_total / (self.total / self.count)
             self.fluct_list.append(fluctuation)
             self.diff_total = 0
             self.total = 0

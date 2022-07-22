@@ -185,7 +185,8 @@ class EnergyHub:
             - config: dict containing the following keys:
               {`LiIonBattery`, `Flywheel`, `Supercapacitor`}'''
         
-        print(f'{os.path.basename(__file__)}: EnergyHub initialized with config: {config}')
+        if __debug__:
+            print(f'{os.path.basename(__file__)}: EnergyHub initialized with config: {config}')
 
         self.liion_cnt = config['LiIonBattery']
         self.flywh_cnt = config['Flywheel']
