@@ -2,114 +2,84 @@ import math
 from datetime import datetime
 import pandas as pd
 
-class FluctuationCalculator:
-    '''Class object computes and stores the net power fluctuation.'''
-    def __init__(self) -> None:
-        self.prev_value = None
-        self.count = 0
-        self.total = 0
-        self.diff_total = 0
+def calc_fluctuation(powers: list):
+    '''Calculates fluctuation of power.
+    Args:
+        - powers: list of tuples containin the following values: (`timestamp`, `pnet`,
+            `pbought`, `soc`, `upper`[optional], `lower`[optional])
+    Returns: the fluctuation value.'''
+    size = len(powers)
+    total_diff = 0
+    for idx in range(1, size):
+        diff = abs(powers[idx][2] - powers[idx - 1][2])
+        total_diff += diff
+    psum = sum([power[2] for power in powers])
+    mean = psum / size
+    return total_diff / mean
 
-    def store(self, value) -> None:
-        '''Computes the difference between two consecutive `power` values;
-        aggregates the value into a sum and increases the count of values
-        by 1.
-        Args:
-            - value: the power value to store.'''
-        if self.prev_value is not None:
-            diff = abs(self.prev_value - value)
-            self.diff_total += diff
-        self.total += value
-        self.count += 1
-        self.prev_value = value
+def calc_periodic_fluctuation(powers: list):
+    '''Calculates the periodic fluctuation of power with a 24 hour period
+    Args:
+        - powers: list of tuples containin the following values: (`timestamp`, `pnet`,
+            `pbought`, `soc`, `upper`[optional], `lower`[optional])
+    Returns: the fluctuation value.'''
 
-    def get_net_demand_fluctuation(self) -> float:
-        if self.total == 0:
-            return 0
+    prev_p = None
+    total_diff = 0
+    psum = 0
+    count = 0
+    fluct_sum = 0
+    fluct_cnt = 0
+    for power in powers:
+        psum += power[2]
+        count += 1
+        if prev_p is None:
+            prev_p = power[2]
         else:
-            return self.diff_total / (self.total / self.count)
+            diff = abs(power[2] - prev_p)
+            total_diff += diff
+            prev_p = power[2]
+        if power[0].hour == 23:
+            fluct = 0
+            if psum != 0 and count != 0:
+                fluct = total_diff / (psum / count)
+            fluct_sum += fluct
+            fluct_cnt += 1
+            prev_p = None
+            total_diff, psum, count = 0, 0, 0
+    return fluct_sum / fluct_cnt
 
-class FluctuationPeriodCalculator:
-    '''Computes the mean net power fluctuation, by computing the power
-    fluctuation for every 24 hours and storing it in a list. The mean
-    of such fluctuations give the mean power fluctuation.'''
-    def __init__(self) -> None:
-        self.prev_value = None
-        self.diff_total = 0
-        self.total = 0
-        self.count = 0
-
-        self.fluct_list = []
-
-    def store(self, timestamp: datetime, value: float) -> float:
-        if self.prev_value is not None:
-            diff = abs(self.prev_value - value)
-            self.diff_total += diff
-
-        self.total += value
-        self.count += 1            
-        self.prev_value = value
-
-        if timestamp.hour == 23:
-            fluctuation = 0
-            if self.total != 0:
-                fluctuation = self.diff_total / (self.total / self.count)
-            self.fluct_list.append(fluctuation)
-            self.diff_total = 0
-            self.total = 0
-            self.count = 0
-            self.prev_value = None
-        
-    def get_mean_net_demand_fluctuation(self) -> float:
-        return sum(self.fluct_list) / len(self.fluct_list)
-
-class PeakPowerSumCalculator:
-    '''Detects whether power value is a local peak and stores it if
-    it is above the upper threshold limit.'''
-    def __init__(self, df: pd.DataFrame) -> None:
-        '''Args:
-            - df: pandas.DataFrame of the input file. `net` must be key of
-                net power demand.'''
-        self.df = df
-        self.peaks = []
-
-    def _is_peak(self, idx, delta) -> bool:
-        '''Checks whether df.iloc[idx] is larger than df.iloc[idx-1] and
-        df.iloc[idx+1] and also checks if df.iloc[idx] is maximum in
-        df.iloc[idx-delta:idx+delta].'''
-        curr_value = self.df.iloc[idx]['net']
-        if idx > 0 and self.df.iloc[idx - 1]['net'] > curr_value:
-            return False
-        if idx < len(self.df) - 1 and self.df.iloc[idx + 1]['net'] > curr_value:
-            return False
-
-
-        left = max(idx - delta, 0)
-        right = min(len(self.df) - 1, idx + delta)
-        if any(math.isclose(self.df.iloc[idx]['net'], self.df.iloc[i]['net'])
-               for i in range(left, right + 1) if i != idx):
-            return False
-        local_peak = max(self.df.iloc[left:right]['net'])
-        return math.isclose(curr_value, local_peak)
-
-    def store(self, idx: int, upperlim, delta: int=10):
-        '''Checks if data point at idx is a local peak in the pandas dataframe.
-        Args:
-            - idx: the index/location of the datapoint in the dataframe in question.
-            - upperlim: the limit above which we consider a peak. If df.iloc[idx] id below
-                upperlim, we ignore the data point.
-            - delta: datapoint is peak if it is larger than adjacent values and is maximum
-                in the [idx - delta, ..., idx + delta] range.
-        '''
-        curr_value = self.df.iloc[idx]['net']
-        if curr_value > upperlim and self._is_peak(idx, delta):
-            self.peaks.append(curr_value)
-
-    def get_peak_power_sum(self) -> float:
-        return sum(self.peaks)
+def is_peak(powers: list, idx: int, delta: int) -> bool:
+    curr_value = powers[idx][2]
+    if idx > 0 and powers[idx - 1][2] >= curr_value:
+        return False
+    if idx < len(powers) - 1 and powers[idx - 1][2] >= curr_value:
+        return False
     
-    def get_peak_count(self) -> int:
-        return len(self.peaks)
+    left = max(idx - delta, 0)
+    right = min(len(powers), idx + delta + 1)
+    if any(math.isclose(curr_value, powers[i][2]) for i in range(left, right)
+           if i != idx):
+        return False
+    local_peak = max(powers[i][2] for i in range(left, right))
+    return math.isclose(curr_value, local_peak)
+
+def calc_peak_power_sum(powers: list):
+    '''Calculates sum of peaks above the upper limit.
+    Args:
+        - powers: list of tuples containin the following values: (`timestamp`, `pnet`,
+            `pbought`, `soc`, `lower`, `upper`)
+    Returns:
+        - the sum of peaks,
+        - the number of peaks.'''
+
+    total = 0
+    count = 0
+    for idx, power in enumerate(powers):
+        if is_peak(powers, idx, 10) and power[2] > power[5]:
+            count += 1
+            total += power[2] - power[5]
+    return total, count
 
 def process_file(fname: str) -> pd.DataFrame:
     df = None
@@ -160,7 +130,7 @@ def compute_limits(pnets, tolerance=2):
     ordered = sorted(pnets)
 
     top, bot = ordered[-1], ordered[0]
-    margin = (top - bot) / 6
+    margin = (top - bot) / 8
 
     mid = (top + bot) / 2
     lowerlimit, upperlimit = mid - margin, mid + margin

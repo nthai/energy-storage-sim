@@ -2,9 +2,6 @@ import numpy as np
 from concurrent.futures import process
 from batteries import EnergyHub
 from util import process_file
-from util import FluctuationCalculator
-from util import FluctuationPeriodCalculator
-from util import PeakPowerSumCalculator
 import os
 
 FILEPATH = os.path.dirname(os.path.abspath(__file__))
@@ -38,9 +35,6 @@ class GreedySim():
 
         energy_cost = 0
         powers = []
-
-        fcalc = FluctuationCalculator()
-        fpcalc = FluctuationPeriodCalculator()
 
         for idx, datarow in self.df.iterrows():
             if __debug__ and verbose:
@@ -84,15 +78,8 @@ class GreedySim():
             powers.append((datarow['timestamp'], datarow['net'], pbought,
                            self.ehub.get_soc()))
 
-            fcalc.store(pbought)
-            fpcalc.store(datarow['timestamp'], pbought)
             energy_cost += pbought
         capex, opex = self._compute_capex_opex()
-
-        metrics = {
-            'fluctuation': fcalc.get_net_demand_fluctuation(),
-            'mean_periodic_fluctuation': fpcalc.get_mean_net_demand_fluctuation()
-        }
 
         costs = {
             'energy_costs': energy_cost,
@@ -100,7 +87,7 @@ class GreedySim():
             'opex': opex,
             'total_costs': energy_cost + capex + opex
         }
-        return costs, metrics, powers
+        return costs, powers
 
 def test_greedy_sim():
     config = {

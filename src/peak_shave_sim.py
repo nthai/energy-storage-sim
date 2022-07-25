@@ -3,8 +3,12 @@ from typing import Type
 import gym
 import pandas as pd
 from batteries import EnergyHub
-from util import FluctuationCalculator, FluctuationPeriodCalculator, PeakPowerSumCalculator, process_file
+from greedy import GreedySim
+from util import process_file
 from util import compute_limits
+from util import calc_fluctuation
+from util import calc_periodic_fluctuation
+from util import calc_peak_power_sum
 
 class PeakShaveEnv(gym.Env):
     def __init__(self, config: dict) -> None:
@@ -219,12 +223,7 @@ class PeakShaveSim:
         verbose = False if 'verbose' not in kwargs.keys() else kwargs['verbose']
 
         energy_costs, total_costs = 0, 0
-        prev_soc, curr_soc = 0, 0
         powers = []
-
-        fcalc = FluctuationCalculator()
-        fpcalc = FluctuationPeriodCalculator()
-        ppcalc = PeakPowerSumCalculator(self.df)
 
         for idx, datarow in self.df.iterrows():
             lowerlim, upperlim = self._get_limits(idx=idx, datarow=datarow, **kwargs)
@@ -233,24 +232,12 @@ class PeakShaveSim:
             pnet = datarow['net']
             price = datarow['price (cents/kWh)']
             _, reward, _, infos = self.env.step(0, pnet, price, verbose=verbose)
-            if kwargs['create_log']:
-                powers.append((datarow['timestamp'], infos['pnet'], infos['pbought'],
-                               infos['soc'], lowerlim, upperlim))
-            
-            fcalc.store(infos['pbought'])
-            fpcalc.store(datarow['timestamp'], infos['pbought'])
-            ppcalc.store(idx, upperlim, 10) # TODO: fix for pbought
+            powers.append((datarow['timestamp'], infos['pnet'], infos['pbought'],
+                           infos['soc'], lowerlim, upperlim))
             energy_costs += -reward
         
         capex, opex = self._compute_capex_opex()
         total_costs += capex + opex + energy_costs
-
-        metrics = {
-            'fluctuation': fcalc.get_net_demand_fluctuation(),
-            'mean_periodic_fluctuation': fpcalc.get_mean_net_demand_fluctuation(),
-            'peak_power_sum': ppcalc.get_peak_power_sum(),
-            'peak_power_count': ppcalc.get_peak_count()
-        }
 
         costs = {
             'energy_costs': energy_costs,
@@ -259,7 +246,7 @@ class PeakShaveSim:
             'total_costs': total_costs
         }
 
-        return costs, metrics, powers
+        return costs, powers
 
 class ConstLimPeakShaveSim(PeakShaveSim):
     '''Peak-shave simulation with constant limits.
@@ -329,8 +316,11 @@ def objective(SimClass: Type[PeakShaveSim], df: pd.DataFrame, liion_cnt: int,
         - flywh_cnt: number of flywheel batteries
         - sucap_cnt: number of supercapacitors
         - **run_config: value fed to the class's run method.
+
     Returns:
         - costs: dict containing amount spent on buying electricity from the grid.
+        - metrics: dict containing the following metrics: `fluctuation`,
+            `mean_periodic_fluctuation`, `peak_power_sum`, `peak_power_count`
     '''
     config = {
         'delta_limit': 1,
@@ -339,7 +329,18 @@ def objective(SimClass: Type[PeakShaveSim], df: pd.DataFrame, liion_cnt: int,
         'Supercapacitor': sucap_cnt
     }
     sim = SimClass(config, df)
-    costs, metrics, _ = sim.run(**run_config)
+    costs, powers = sim.run(**run_config)
+
+    metrics = {
+        'fluctuation': calc_fluctuation(powers),
+        'mean_periodic_fluctuation': calc_periodic_fluctuation(powers)
+    }
+
+    if SimClass is not GreedySim:
+        ppsum, ppcount = calc_peak_power_sum(powers)
+        metrics['peak_power_sum'] = ppsum
+        metrics['peak_power_count'] = ppcount
+
     return costs, metrics
 
 def get_args() -> argparse.Namespace:
@@ -370,8 +371,16 @@ def test_sim(SimClass: Type[PeakShaveSim], run_type: str, **sim_run_config):
         'Supercapacitor': 3,
     }
     sim = SimClass(config, df)
-    costs, metrics, _ = sim.run(**sim_run_config)
+    costs, powers = sim.run(**sim_run_config)
     
+    ppsum, ppcount = calc_peak_power_sum(powers)
+    metrics = {
+        'fluctuation': calc_fluctuation(powers),
+        'mean_periodic_fluctuation': calc_periodic_fluctuation(powers),
+        'peak_power_sum': ppsum,
+        'peak_power_count': ppcount
+    }
+
     print()
     print(f'{run_type} run energy costs: {costs["energy_costs"]:.2f} ' +
           f'capex: {costs["capex"]:.2f} opex: {costs["opex"]:.2f} ' +
@@ -386,7 +395,7 @@ def test_objective(SimClass: Type[PeakShaveSim], **run_config):
     df = process_file(args.datafile)
 
     costs, metrics = objective(SimClass, df, args.liion, args.flywheel, args.supercap,
-                      **run_config)
+                               **run_config)
     print(costs)
     print(metrics)
     print()

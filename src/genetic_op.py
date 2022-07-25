@@ -41,9 +41,19 @@ def fitness_const(sol, _) -> float:
                                sucap_cnt, margin=margin, penalize_charging=True,
                                create_log=False)
 
-    cost = costs['total_costs']
+    # cost = costs['total_costs']
+    # cost = metrics['fluctuation']
+    cost = metrics['peak_power_sum']
     print_gene_fitness(liion_cnt, flywh_cnt, sucap_cnt, cost, margin)
-    return 100000/cost
+
+    try:
+        output = 100000/cost
+    except:
+        print(cost)
+        raise
+
+
+    return output
 
 def fitness_dyn(sol, _) -> float:
     '''Fitness function used for finding optimal parameters in case of dynamically
@@ -65,7 +75,9 @@ def fitness_dyn(sol, _) -> float:
                                sucap_cnt, lookahead=lookahead, margin=margin,
                                penalize_charging=True, create_log=False)
 
-    cost = costs['total_costs']
+    # cost = costs['total_costs']
+    # cost = metrics['fluctuation']
+    cost = metrics['peak_power_sum']
     print_gene_fitness(liion_cnt, flywh_cnt, sucap_cnt, cost, margin, lookahead)
     return 100000/cost
 
@@ -88,7 +100,9 @@ def fitness_eq(sol, _) -> float:
     costs, metrics = objective(EqualizedLimPeakShaveSim, DF, liion_cnt, flywh_cnt,
                                sucap_cnt, lookahead=lookahead, penalize_charging=True,
                                create_log=False)
-    cost = costs['total_costs']
+    # cost = costs['total_costs']
+    # cost = metrics['fluctuation']
+    cost = metrics['peak_power_sum']
     print_gene_fitness(liion_cnt, flywh_cnt, sucap_cnt, cost, lookahead=lookahead)
     return 100000/cost
 
@@ -107,7 +121,9 @@ def fitness_greedy(sol, _):
     sucap_cnt = sol[2]
 
     costs, metrics = objective(GreedySim, DF, liion_cnt, flywh_cnt, sucap_cnt)
-    cost = costs['total_costs']
+    # cost = costs['total_costs']
+    # cost = metrics['fluctuation']
+    cost = metrics['peak_power_sum']
     print_gene_fitness(liion_cnt, flywh_cnt, sucap_cnt, cost)
     return 100000/cost
 
@@ -180,14 +196,14 @@ def main(configs):
 
     num_genes = 3
     gene_type = [int, int, int]
-    gene_space = [{'low': 0, 'high': 50},
-                  {'low': 0, 'high': 50},
-                  {'low': 0, 'high': 50}]
+    gene_space = [{'low': 0, 'high': 5},
+                  {'low': 0, 'high': 5},
+                  {'low': 0, 'high': 5}]
 
     if run_config['experiment'] in {'const', 'dyn'}:
         num_genes += 1
         gene_type += [float]
-        gene_space += [{'low': 0, 'high': 1}]
+        gene_space += [{'low': 0, 'high': .2}]
 
     if run_config['experiment'] == 'const':
         pygad_config['fitness_func'] = fitness_const
