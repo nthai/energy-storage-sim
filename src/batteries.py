@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 import os
+from re import L
 import yaml
 import numpy as np
 from util import chop
@@ -81,11 +82,18 @@ class Battery(ABC):
 
         assert pdemand >= 0
 
+        # print(type(self).__name__)
+        # if isinstance(self, LiIonBattery):
+        #     print('Charging LiIonBattery')
+
         # self-discharge always happens
         sdcharge = self._selfdischarge()
 
+        penalty = 0
+        prev_soc = self.soc
+
         if pdemand == 0:
-            return 0, 0, sdcharge
+            return 0, 0, sdcharge, 0
 
         # check if pdemand exceeds the max charging power
         pcharge = min(self.maxcharge, pdemand)
@@ -100,7 +108,11 @@ class Battery(ABC):
 
         # 
         premain = pdemand - pcharge
-        return pcharge, premain, sdcharge
+
+        if isinstance(self, LiIonBattery):
+            penalty = (prev_soc - self.soc) ** 2
+
+        return pcharge, premain, sdcharge, penalty
 
     def discharge(self, pdemand, tdelta=1):
         '''Try to discharge pdemand of power from the battery.
@@ -117,8 +129,11 @@ class Battery(ABC):
         # self-discharge always happens
         sdcharge = self._selfdischarge()
 
+        penalty = 0
+        prev_soc = self.soc
+
         if pdemand == 0:
-            return 0, 0, sdcharge
+            return 0, 0, sdcharge, 0
 
         pdischarge = min(pdemand / self.etadischarge, self.maxdischarge)
 
@@ -129,7 +144,11 @@ class Battery(ABC):
         assert self.soc >= self.minsoc
 
         premain = chop(pdemand - pdischarge * self.etadischarge)
-        return pdischarge, premain, sdcharge
+
+        if isinstance(self, LiIonBattery):
+            penalty += (self.soc - prev_soc) ** 2
+
+        return pdischarge, premain, sdcharge, penalty
 
     def _selfdischarge(self):
         sdcharge = self.selfdischarge * self.soc
@@ -215,12 +234,14 @@ class EnergyHub:
 
         total_charge = 0
         total_selfdischarge = 0
+        total_penalty = 0
         for battery in self.storages:
-            pcharge, pdemand, sdcharge = battery.charge(pdemand, tdelta)
+            pcharge, pdemand, sdcharge, penalty = battery.charge(pdemand, tdelta)
             total_charge += pcharge
             total_selfdischarge += sdcharge
+            total_penalty += penalty
 
-        return total_charge, total_selfdischarge
+        return total_charge, total_selfdischarge, total_penalty
 
     def discharge(self, pdemand, tdelta=1):
         '''Attempts to discharge batteries in the storage in order.
@@ -234,11 +255,13 @@ class EnergyHub:
         '''
         total_discharge = 0
         total_selfdischarge = 0
+        total_penalty = 0
         for battery in self.storages:
-            pdischarge, pdemand, sdcharge = battery.discharge(pdemand, tdelta)
+            pdischarge, pdemand, sdcharge, penalty = battery.discharge(pdemand, tdelta)
             total_discharge += pdischarge
             total_selfdischarge += sdcharge
-        return total_discharge, total_selfdischarge
+            total_penalty += penalty
+        return total_discharge, total_selfdischarge, total_penalty
 
     def do_nothing(self):
         total_selfdischarge = 0

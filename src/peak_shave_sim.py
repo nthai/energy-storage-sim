@@ -98,10 +98,11 @@ class PeakShaveEnv(gym.Env):
         self._execute_action(action)
 
         pbought = 0
+        total_penalty = 0
         if pnet > self.upperlim:
             # the demand is higher than the upper limit, take energy from the battery
             pdischarge = pnet - self.upperlim
-            total_discharge, total_selfdischarge = self.ehub.discharge(pdischarge)
+            total_discharge, total_selfdischarge, total_penalty = self.ehub.discharge(pdischarge)
             pbought = pnet - total_discharge
 
             if __debug__ and verbose:
@@ -112,7 +113,7 @@ class PeakShaveEnv(gym.Env):
             # the demand is lower than the lower limit, use the excess to charge
             # the battery
             pcharge = self.lowerlim - pnet
-            total_charge, total_selfdischarge = self.ehub.charge(pcharge)
+            total_charge, total_selfdischarge, total_penalty = self.ehub.charge(pcharge)
             pbought = pnet + total_charge
 
             if __debug__ and verbose:
@@ -132,7 +133,7 @@ class PeakShaveEnv(gym.Env):
         infos['pbought'] = pbought
         infos['soc'] = self.ehub.get_soc()
         cost = price * pbought / 100
-        reward = -cost
+        reward = -cost - total_penalty
 
         if __debug__ and verbose:
             maxsoc = self.ehub.get_maxsoc()
@@ -142,7 +143,8 @@ class PeakShaveEnv(gym.Env):
             else:
                 report += 'SOC:     0.00 kWh (0%) '
             report += f'Price: {price:7.2f} '
-            report += f'Money spent: {cost:7.2f}'
+            report += f'Money spent: {cost:7.2f} '
+            report += f'Total pen.: {total_penalty:7.2f}'
             print(report)
 
         return state, reward, done, infos
@@ -214,6 +216,8 @@ class PeakShaveSim:
         raise NotImplementedError()
 
     def run(self, **kwargs):
+        verbose = False if 'verbose' not in kwargs.keys() else kwargs['verbose']
+
         energy_costs, total_costs = 0, 0
         prev_soc, curr_soc = 0, 0
         powers = []
@@ -228,18 +232,14 @@ class PeakShaveSim:
 
             pnet = datarow['net']
             price = datarow['price (cents/kWh)']
-            _, reward, _, infos = self.env.step(0, pnet, price)
-            if kwargs['penalize_charging']:
-                prev_soc = curr_soc
-                curr_soc = self.env.ehub.get_soc()
-                total_costs += ((prev_soc - curr_soc) ** 2)
+            _, reward, _, infos = self.env.step(0, pnet, price, verbose=verbose)
             if kwargs['create_log']:
                 powers.append((datarow['timestamp'], infos['pnet'], infos['pbought'],
                                infos['soc'], lowerlim, upperlim))
             
             fcalc.store(infos['pbought'])
             fpcalc.store(datarow['timestamp'], infos['pbought'])
-            ppcalc.store(idx, upperlim, 10)
+            ppcalc.store(idx, upperlim, 10) # TODO: fix for pbought
             energy_costs += -reward
         
         capex, opex = self._compute_capex_opex()
@@ -365,9 +365,9 @@ def test_sim(SimClass: Type[PeakShaveSim], run_type: str, **sim_run_config):
     df = process_file('../data/Sub71125.csv')
     config = {
         'delta_limit': 1,
-        'LiIonBattery': 10,
-        'Flywheel': 10,
-        'Supercapacitor': 10,
+        'LiIonBattery': 3,
+        'Flywheel': 3,
+        'Supercapacitor': 3,
     }
     sim = SimClass(config, df)
     costs, metrics, _ = sim.run(**sim_run_config)
@@ -392,7 +392,7 @@ def test_objective(SimClass: Type[PeakShaveSim], **run_config):
     print()
 
 def main():
-    test_sim(ConstLimPeakShaveSim, 'Const', margin=.02, penalize_charging=True, create_log=True)
+    test_sim(ConstLimPeakShaveSim, 'Const', margin=.02, penalize_charging=True, create_log=True, verbose=True)
     test_sim(DynamicLimPeakShaveSim, 'Dynamic', lookahead=24, margin=.05, penalize_charging=True, create_log=True)
     test_sim(EqualizedLimPeakShaveSim, 'Equalized', lookahead=24, penalize_charging=True, create_log=True)
 
