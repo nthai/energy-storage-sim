@@ -17,10 +17,10 @@
   * Capital cost
   * Cost of electricity
   * Penalty for charging
-* Fluctuation
+* Fluctuation: $\frac{\sum{|p_i - p_{i - 1}|}}{\bar{p}}$, the sum of changes in power divided by the mean power.
 * Periodic fluctuation: We compute the fluctuation for each day and take the average of it.
-* Sum of peaks above the upper limit
-* Count of peaks above the upper limit
+* Sum of peaks above the upper limit. Here we have to be careful with setting the upper limit, as a low sum could also be achieved by setting a very high upper limit.
+* Count of peaks above the upper limit.
 
 # Algorithms
 * Constant limits:
@@ -40,10 +40,21 @@
 ![dynamic limits](figures/DynamicLimPeakShaveSim.png)
 
 * Dynamic limits that equalizes the area above and below the upper and lower limits
-  * 
+  * We use predicted data of the next 24 hours and use binary search to find the upper and lower limit. Constraints are:
+    * `abs(upper - lower) = margin`, where the input parameter `margin` is a ratio of the distance between the max and min.
+    * `abs(area_upper - area_lower) < tolerance`, where `tolerance` is an input parameter, `area_upper` is the approximation of the area above the upper limit and `area_lower` is the approximation of the area below the lower limit.
+  * There is a possibility to multiply the lower limit by th input parameter `factor`. 
   
 ![equalized limits](figures/EqualizedLimPeakShaveSim.png)
 
 * Greedy algorithm
+  * The basic principle of the greedy algorithm is that if the electricity is cheap, we should buy as much as we can to charge our batteries and use the batteries when electricity is more expensive.
+  * The algorithm computes how long the batteries would last and then looks that far into the future to see if there would be cheaper electricity prices later. If there is a future cheaper price, we wait until then, otherwise, we buy electricity to charge our batteries.
 
 ![greedy sim](figures/GreedySim.png)
+
+# Some thoughts
+
+* After a certain capacity, the number of batteries do not matter anymore. The deciding factor of the performance measures is the margin, the (half-)distance between the upper and the lower limits.
+* The self-discharge rate is an important factor. If we use supercapacitors, our performance measures degrade, because the supercapacitors lose a lot of charge between decisions compared to the Li-Ion battery. Note: this is also cause by the algorithm we implemented, because right now, supercapacitors have higher priority when charging.
+* On this timescale the maximum rate of charge does not matter, as all types of batteries can be charged to full charge in an hour. (This is why we cannot use the benefits of a cupercapacitor to our advantage at the moment.)
