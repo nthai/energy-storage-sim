@@ -55,6 +55,8 @@ def is_peak(powers: list, idx: int, delta: int) -> bool:
         return False
     if idx < len(powers) - 1 and powers[idx - 1][2] >= curr_value:
         return False
+    if idx == 0 or idx == len(powers) - 1:
+        return False
     
     left = max(idx - delta, 0)
     right = min(len(powers), idx + delta + 1)
@@ -116,26 +118,32 @@ def sum_above_below(pnets, lower, upper):
             sumabove += pnet - upper
     return sumbelow, sumabove
 
-def compute_limits(pnets, tolerance=2):
+def compute_limits(pnets, tolerance=2, margin=0.25, factor=1):
     '''Compute an upper and lower limit for which the area below the lower limits and
     the area above the upper limit in the vector pnets is approximately the same.
     Args:
         - pnets: list of power demands for the next period (e.g. 24 hours) in kW.
         - tolerance: algorithms runs until the difference between the sum above the
-              upper limit and the sum below the lower limit reaches the tolerance
-              value (in kW)
+            upper limit and the sum below the lower limit reaches the tolerance
+            value (in kW)
+        - margin: sets the the distance of the upper and the lower limit from the mid
+            point. Its value is the percentage of the distance between the max and the
+            min value of pnets.
+        - factor: lowerlimit is multiplied by factor at the end. TODO: experiment with
+            factor > 1 to see if having a higher lowerlimit give us a more efficient
+            operation.
     Returns:
         - lowerlimit: limit for the lower threshold (in kW)
         - upperlimit: limit for the upper threshold (in kW)'''
     ordered = sorted(pnets)
 
     top, bot = ordered[-1], ordered[0]
-    margin = (top - bot) / 8
+    margin = (top - bot) * margin
 
     mid = (top + bot) / 2
     lowerlimit, upperlimit = mid - margin, mid + margin
     sumbelow, sumabove = sum_above_below(ordered, lowerlimit, upperlimit)
-    
+
     while abs(sumabove - sumbelow) > tolerance:
         if sumabove > sumbelow:
             bot = mid
@@ -147,7 +155,7 @@ def compute_limits(pnets, tolerance=2):
         lowerlimit, upperlimit = mid - margin, mid + margin
         sumbelow, sumabove = sum_above_below(ordered, lowerlimit, upperlimit)
 
-    return lowerlimit, upperlimit
+    return lowerlimit * factor, upperlimit
 
 def test_compute_limits():
     df = process_file('../data/Sub71125.csv')
@@ -168,72 +176,72 @@ if __name__ == '__main__':
         def test1(self):
             x = np.arange(0, 10, 0.01)
             y = np.sin(x) + 1
-            df = pd.DataFrame({'x': x, 'net': y})
-            ppscalc = PeakPowerSumCalculator(df)
 
-            for idx, _ in df.iterrows():
-                ppscalc.store(idx, 1, 10)
-            
-            self.assertEqual(ppscalc.get_peak_count(), 2)
+            c = np.array([1] * x.size)
+            powers = np.array([x, y, y, c, c, c]).transpose()
+            _, count = calc_peak_power_sum(powers)
+
+            self.assertEqual(count, 2)
 
         def test2(self):
             x = np.arange(0, 10, 0.01)
             y = np.sin(x) + 1
-            df = pd.DataFrame({'x': x, 'net': y})
-            ppscalc = PeakPowerSumCalculator(df)
-
-            for idx, _ in df.iterrows():
-                ppscalc.store(idx, 2, 10)
             
-            self.assertEqual(ppscalc.get_peak_count(), 0)
+            c = np.array([2] * x.size)
+            powers = np.array([x, y, y, c, c, c]).transpose()
+            _, count = calc_peak_power_sum(powers)
+            
+            self.assertEqual(count, 0)
         
         def test3(self):
             x = np.arange(0, 10, 0.01)
-            df = pd.DataFrame({'net': x})
-            ppscalc = PeakPowerSumCalculator(df)
-            for idx, _ in df.iterrows():
-                ppscalc.store(idx, 0, 10)
-            self.assertEqual(ppscalc.get_peak_count(), 0)
+
+            c = np.array([1] * x.size)
+            powers = np.array([x, x, x, c, c, c]).transpose()
+            _, count = calc_peak_power_sum(powers)
+            
+            self.assertEqual(count, 0)
 
         def test4(self):
             x = np.arange(0, -10, -0.01)
-            df = pd.DataFrame({'net': x})
-            ppscalc = PeakPowerSumCalculator(df)
-            for idx, _ in df.iterrows():
-                ppscalc.store(idx, 0, 10)
-            self.assertEqual(ppscalc.get_peak_count(), 0)
-            self.assertEqual(ppscalc.get_peak_count(), 0)
+
+            c = np.array([1] * x.size)
+            powers = np.array([x, x, x, c, c, c]).transpose()
+            _, count = calc_peak_power_sum(powers)
+
+            self.assertEqual(count, 0)
 
         def test5(self):
             x = [1 if i%2 == 0 else -1 for i in range(100)]
-            df = pd.DataFrame({'net': x})
-            ppscalc = PeakPowerSumCalculator(df)
-            for idx, _ in df.iterrows():
-                ppscalc.store(idx, 0, 10)
-            self.assertEqual(ppscalc.get_peak_count(), 0)
+            
+            c = np.array([1] * 100)
+            powers = np.array([x, x, x, c, c, c]).transpose()
+            _, count = calc_peak_power_sum(powers)
+            
+            self.assertEqual(count, 0)
 
     class TestFluctuationCalculator(unittest.TestCase):
         def test1(self):
-            fcalc = FluctuationCalculator()
             count = 100
             rndlist = np.random.rand(count)
+            powers = np.array([rndlist, rndlist, rndlist]).transpose()
             num, den = 0, 0
             for i in range(count):
                 if i > 0:
                     num += abs(rndlist[i] - rndlist[i - 1])
                 den += rndlist[i]
-                fcalc.store(rndlist[i])
+
+            fcalc = calc_fluctuation(powers)
             den /= count
             fluct = num / den
 
-            self.assertAlmostEqual(fluct, fcalc.get_net_demand_fluctuation())
+            self.assertAlmostEqual(fluct, fcalc)
 
         def test2(self):
             nums = [1.23] * 50
-            fcalc = FluctuationCalculator()
-            for elem in nums:
-                fcalc.store(elem)
-            self.assertAlmostEqual(fcalc.get_net_demand_fluctuation(), 0)
+            powers = np.array([nums, nums, nums]).transpose()
+            fcalc = calc_fluctuation(powers)
+            self.assertAlmostEqual(fcalc, 0)
 
     unittest.main()
 

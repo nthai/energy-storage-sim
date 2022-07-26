@@ -19,7 +19,11 @@ def print_gene_fitness(liion_cnt, flywh_cnt, sucap_cnt, cost,
         text += f'Margin: {margin:6.4f} '
     if lookahead is not None:
         text += f'Lookahead: {lookahead:3d} '
-    text += f'Fitness: {100000/cost:.4f}'
+    if cost == 0:
+        text += f'Fitness:        inf '
+    else:
+        text += f'Fitness: {100000/cost:10.4f} '
+    text += f'Cost: {cost:9.4f}'
     print(text)
 
 def fitness_const(sol, _) -> float:
@@ -51,7 +55,6 @@ def fitness_const(sol, _) -> float:
     except:
         print(cost)
         raise
-
 
     return output
 
@@ -104,6 +107,8 @@ def fitness_eq(sol, _) -> float:
     # cost = metrics['fluctuation']
     cost = metrics['peak_power_sum']
     print_gene_fitness(liion_cnt, flywh_cnt, sucap_cnt, cost, lookahead=lookahead)
+    if cost == 0:
+        return float('inf')
     return 100000/cost
 
 def fitness_greedy(sol, _):

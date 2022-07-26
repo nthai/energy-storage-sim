@@ -9,6 +9,7 @@ from util import compute_limits
 from util import calc_fluctuation
 from util import calc_periodic_fluctuation
 from util import calc_peak_power_sum
+from util import is_peak
 
 class PeakShaveEnv(gym.Env):
     def __init__(self, config: dict) -> None:
@@ -362,17 +363,40 @@ def get_args() -> argparse.Namespace:
 
     return args
 
+def observe_powers(powers: list, df_log=False):
+    for idx, power in enumerate(powers):
+        if df_log:
+            power = list(power)
+            if is_peak(powers, idx, 10):
+                power.append(1)
+            else:
+                power.append(0)
+            print(','.join(map(str, power)))
+        else:
+            print(
+                f'{power[0]} - ' +
+                f'net: {power[1]:4.1f} - ' +
+                f'bought: {power[2]:6.2f} - ' +
+                f'soc: {power[3]:6.2f} - ' +
+                f'lower: {power[4]:6.2f} - ' +
+                f'upper: {power[5]:6.2f} - ' +
+                (f'peak! ' if is_peak(powers, idx, 10) else '')
+            )
+
 def test_sim(SimClass: Type[PeakShaveSim], run_type: str, **sim_run_config):
     df = process_file('../data/Sub71125.csv')
     config = {
         'delta_limit': 1,
-        'LiIonBattery': 3,
+        'LiIonBattery': 2,
         'Flywheel': 3,
-        'Supercapacitor': 3,
+        'Supercapacitor': 0,
     }
     sim = SimClass(config, df)
     costs, powers = sim.run(**sim_run_config)
-    
+
+    if __debug__:
+        observe_powers(powers, True)
+
     ppsum, ppcount = calc_peak_power_sum(powers)
     metrics = {
         'fluctuation': calc_fluctuation(powers),
@@ -401,13 +425,13 @@ def test_objective(SimClass: Type[PeakShaveSim], **run_config):
     print()
 
 def main():
-    test_sim(ConstLimPeakShaveSim, 'Const', margin=.02, penalize_charging=True, create_log=True, verbose=True)
-    test_sim(DynamicLimPeakShaveSim, 'Dynamic', lookahead=24, margin=.05, penalize_charging=True, create_log=True)
+    # test_sim(ConstLimPeakShaveSim, 'Const', margin=.02, penalize_charging=True, create_log=True, verbose=True)
+    # test_sim(DynamicLimPeakShaveSim, 'Dynamic', lookahead=24, margin=.05, penalize_charging=True, create_log=True)
     test_sim(EqualizedLimPeakShaveSim, 'Equalized', lookahead=24, penalize_charging=True, create_log=True)
 
-    test_objective(ConstLimPeakShaveSim, margin=.02, penalize_charging=True, create_log=True)
-    test_objective(DynamicLimPeakShaveSim, lookahead=24, margin=.05, penalize_charging=True, create_log=True)
-    test_objective(EqualizedLimPeakShaveSim, lookahead=24, penalize_charging=True, create_log=True)
+    # test_objective(ConstLimPeakShaveSim, margin=.02, penalize_charging=True, create_log=True)
+    # test_objective(DynamicLimPeakShaveSim, lookahead=24, margin=.05, penalize_charging=True, create_log=True)
+    # test_objective(EqualizedLimPeakShaveSim, lookahead=24, penalize_charging=True, create_log=True)
 
 if __name__ == '__main__':
     main()
