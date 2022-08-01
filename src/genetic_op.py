@@ -1,4 +1,4 @@
-
+import math
 import argparse
 import pygad
 from greedy import GreedySim
@@ -11,7 +11,7 @@ from peak_shave_sim import EqualizedLimPeakShaveSim
 DF = None
 
 def print_gene_fitness(liion_cnt, flywh_cnt, sucap_cnt, cost,
-                       margin=None, lookahead=None):
+                       metrics, margin=None, lookahead=None):
     text = f'LiIon: {liion_cnt:3d} '
     text += f'Flywheel: {flywh_cnt:3d} '
     text += f'Supercapacitor: {sucap_cnt:3d} '
@@ -19,11 +19,16 @@ def print_gene_fitness(liion_cnt, flywh_cnt, sucap_cnt, cost,
         text += f'Margin: {margin:6.4f} '
     if lookahead is not None:
         text += f'Lookahead: {lookahead:3d} '
-    if cost == 0:
-        text += f'Fitness:        inf '
+    if math.isclose(cost, 0):
+        text += f'Fitness:    inf '
     else:
-        text += f'Fitness: {100000/cost:10.4f} '
-    text += f'Cost: {cost:9.4f}'
+        text += f'Fitness: {100000/cost:6.2f} '
+    text += f'Cost: {cost:9.2f} '
+
+    for k, v in metrics.items():
+        text += f'{k}: '
+        text += f'{v:.2f} '
+
     print(text)
 
 def fitness_const(sol, _) -> float:
@@ -45,10 +50,10 @@ def fitness_const(sol, _) -> float:
                                sucap_cnt, margin=margin, penalize_charging=True,
                                create_log=False)
 
-    # cost = costs['total_costs']
+    cost = costs['total_costs']
     # cost = metrics['fluctuation']
-    cost = metrics['peak_power_sum']
-    print_gene_fitness(liion_cnt, flywh_cnt, sucap_cnt, cost, margin)
+    # cost = metrics['peak_power_sum']
+    print_gene_fitness(liion_cnt, flywh_cnt, sucap_cnt, cost, metrics, margin)
 
     try:
         output = 100000/cost
@@ -78,10 +83,10 @@ def fitness_dyn(sol, _) -> float:
                                sucap_cnt, lookahead=lookahead, margin=margin,
                                penalize_charging=True, create_log=False)
 
-    # cost = costs['total_costs']
+    cost = costs['total_costs']
     # cost = metrics['fluctuation']
-    cost = metrics['peak_power_sum']
-    print_gene_fitness(liion_cnt, flywh_cnt, sucap_cnt, cost, margin, lookahead)
+    # cost = metrics['peak_power_sum']
+    print_gene_fitness(liion_cnt, flywh_cnt, sucap_cnt, cost, metrics, margin, lookahead)
     return 100000/cost
 
 def fitness_eq(sol, _) -> float:
@@ -103,10 +108,10 @@ def fitness_eq(sol, _) -> float:
     costs, metrics = objective(EqualizedLimPeakShaveSim, DF, liion_cnt, flywh_cnt,
                                sucap_cnt, lookahead=lookahead, penalize_charging=True,
                                create_log=False)
-    # cost = costs['total_costs']
+    cost = costs['total_costs']
     # cost = metrics['fluctuation']
-    cost = metrics['peak_power_sum']
-    print_gene_fitness(liion_cnt, flywh_cnt, sucap_cnt, cost, lookahead=lookahead)
+    # cost = metrics['peak_power_sum']
+    print_gene_fitness(liion_cnt, flywh_cnt, sucap_cnt, cost, metrics, lookahead=lookahead)
     if cost == 0:
         return float('inf')
     return 100000/cost
@@ -126,10 +131,10 @@ def fitness_greedy(sol, _):
     sucap_cnt = sol[2]
 
     costs, metrics = objective(GreedySim, DF, liion_cnt, flywh_cnt, sucap_cnt)
-    # cost = costs['total_costs']
+    cost = costs['total_costs']
     # cost = metrics['fluctuation']
-    cost = metrics['peak_power_sum']
-    print_gene_fitness(liion_cnt, flywh_cnt, sucap_cnt, cost)
+    # cost = metrics['peak_power_sum']
+    print_gene_fitness(liion_cnt, flywh_cnt, sucap_cnt, cost, metrics)
     return 100000/cost
 
 def on_generation(ga_instance: pygad.GA):
@@ -201,9 +206,9 @@ def main(configs):
 
     num_genes = 3
     gene_type = [int, int, int]
-    gene_space = [{'low': 0, 'high': 5},
-                  {'low': 0, 'high': 5},
-                  {'low': 0, 'high': 5}]
+    gene_space = [{'low': 0, 'high': 10},
+                  {'low': 0, 'high': 10},
+                  {'low': 0, 'high': 10}]
 
     if run_config['experiment'] in {'const', 'dyn'}:
         num_genes += 1

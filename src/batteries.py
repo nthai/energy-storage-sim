@@ -339,10 +339,10 @@ class EnergyHub:
     def power_until(self, tstep, pnet_list):
         pass
 
-    def get_capex(self, t):
+    def get_capex(self, t) -> float:
         return sum([battery.get_capex(t) for battery in self.storages])
 
-    def get_opex(self, t):
+    def get_opex(self, t) -> float:
         return sum([battery.get_opex(t) for battery in self.storages])
 
     def save_soc(self) -> list[float]:

@@ -178,7 +178,7 @@ class PeakShaveSim:
         df['net'] = df['Load (kWh)'] - df['PV (kWh)']
         return df
 
-    def _compute_capex_opex(self):
+    def _compute_capex_opex(self) -> tuple[float, float]:
         '''Computes the capital and the operational expenses of the energy hub by first
         determining the length of the period'''
         start = self.df.iloc[0]['ReadTimestamp']

@@ -53,6 +53,43 @@
 
 ![greedy sim](figures/GreedySim.png)
 
+# Results
+
+## Results with constant limits
+
+| Li-ion | Flywheel | Supercapacitor | Margin |    Cost   | Fluctuation | Mean fluctuation | Peak sum | Peak count |
+|--------|----------|----------------|--------|-----------|-------------|------------------|----------|------------|
+|   0    |     0    |        0       |        |           |             |                  |          |            |
+|   1    |     0    |        1       | 0.1833 | 221688.12 |   375.44    |       1.72       |  1879.41 |    118     |
+|   1    |     0    |        1       | 0.0727 | 226413.79 |   321.79    |       1.49       |  2650.39 |    122     |
+|   1    |     2    |        0       | 0.0810 | 229725.98 |   366.62    |       1.75       |  2447.16 |    112     |
+
+## Results with dynamic limits
+
+| Li-ion | Flywheel | Supercapacitor | Margin |    Cost   | Fluctuation | Mean fluctuation | Peak sum | Peak count |
+|--------|----------|----------------|--------|-----------|-------------|------------------|----------|------------|
+|   0    |     0    |        0       |        |           |             |                  |          |            |
+|   1    |     0    |        1       | 0.1918 | 216242.35 |   381.65    |       1.78       |  825.56  |    114     |
+|   1    |     0    |        3       | 0.1088 | 223111.70 |   282.96    |       1.31       | 1281.14  |    131     |
+|   1    |     1    |        1       | 0.0672 | 222051.81 |   218.78    |       1.02       | 1529.34  |    133     |
+
+## Results with equalized limits
+
+| Li-ion | Flywheel | Supercapacitor |    Cost   | Fluctuation | Mean fluctuation | Peak sum | Peak count |
+|--------|----------|----------------|-----------|-------------|------------------|----------|------------|
+|   0    |     0    |        0       | 209902.85 |    466.50   |       2.22       |  1820.35 |    227     |
+|   0    |     0    |        1       | 213155.99 |    361.29   |       1.70       |   956.76 |    168     |
+|   1    |     1    |        0       | 217192.79 |    337.46   |       1.59       |   299.18 |     69     |
+
+## Results with greedy algorithm
+
+| Li-ion | Flywheel | Supercapacitor |    Cost   | Fluctuation | Mean fluctuation |
+|--------|----------|----------------|-----------|-------------|------------------|
+|   0    |     0    |        0       |           |             |                  |
+|   0    |     0    |        1       |  54135.20 |   8750.25   |      38.99       |
+|   0    |     2    |        0       |  78939.61 |   9556.09   |      43.92       |
+|   0    |     1    |        0       |  47259.91 |   8982.44   |      41.38       |
+
 # Some thoughts
 
 * After a certain capacity, the number of batteries do not matter anymore. The deciding factor of the performance measures is the margin, the (half-)distance between the upper and the lower limits.
