@@ -65,12 +65,14 @@ class GreedySim():
                 pbought += pneed * prices.iloc[0] / 100
                 # use it to charge the ehub
                 self.ehub.charge(pneed)
+                # also, buy energy to satisfy current need
+                pbought += datarow['net'] * prices.iloc[0] / 100
                 if __debug__ and verbose:
                     print(f'\tWe need to charge!')
                     print(f'\tcharge {pneed:.2f} kWh!')
-
-            # discharge
-            self.ehub.discharge(datarow['net'])
+            else:
+                # discharge
+                self.ehub.discharge(datarow['net'])
             if __debug__ and verbose:
                 print(f'\tdischarge: {datarow["net"]:.2f}')
                 print(f'\tnew soc: {self.ehub.get_soc():.2f}')

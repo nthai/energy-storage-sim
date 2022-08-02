@@ -387,8 +387,8 @@ def test_sim(SimClass: Type[PeakShaveSim], run_type: str, **sim_run_config):
     df = process_file('../data/Sub71125.csv')
     config = {
         'delta_limit': 1,
-        'LiIonBattery': 2,
-        'Flywheel': 3,
+        'LiIonBattery': 0,
+        'Flywheel': 0,
         'Supercapacitor': 0,
     }
     sim = SimClass(config, df)
@@ -396,23 +396,28 @@ def test_sim(SimClass: Type[PeakShaveSim], run_type: str, **sim_run_config):
 
     if __debug__:
         observe_powers(powers, True)
-
-    ppsum, ppcount = calc_peak_power_sum(powers)
     metrics = {
         'fluctuation': calc_fluctuation(powers),
         'mean_periodic_fluctuation': calc_periodic_fluctuation(powers),
-        'peak_power_sum': ppsum,
-        'peak_power_count': ppcount
     }
-
+    if run_type != 'Greedy':
+        ppsum, ppcount = calc_peak_power_sum(powers)
+        metrics['peak_power_sum'] = ppsum
+        metrics['peak_power_count'] = ppcount
+    else:
+        metrics['peak_power_sum'] = None
+        metrics['peak_power_count'] = None
+    
     print()
     print(f'{run_type} run energy costs: {costs["energy_costs"]:.2f} ' +
           f'capex: {costs["capex"]:.2f} opex: {costs["opex"]:.2f} ' +
           f'total costs: {costs["total_costs"]:.2f}')
-    print(f'Fluctuation: {metrics["fluctuation"]:.2f} ' +
-          f'Mean periodic fluctuation: {metrics["mean_periodic_fluctuation"]:.2f} ' +
-          f'Peak above upper limit sum: {metrics["peak_power_sum"]:.2f} ' +
-          f'count: {metrics["peak_power_count"]}')
+    outstr = (f'Fluctuation: {metrics["fluctuation"]:.2f} ' +
+              f'Mean periodic fluctuation: {metrics["mean_periodic_fluctuation"]:.2f} ')
+    if run_type != 'Greedy':
+        outstr += (f'Peak above upper limit sum: {metrics["peak_power_sum"]:.2f} ' +
+                   f'count: {metrics["peak_power_count"]}')
+    print(outstr)
 
 def test_objective(SimClass: Type[PeakShaveSim], **run_config):
     args = get_args()
@@ -427,7 +432,8 @@ def test_objective(SimClass: Type[PeakShaveSim], **run_config):
 def main():
     # test_sim(ConstLimPeakShaveSim, 'Const', margin=.02, penalize_charging=True, create_log=True, verbose=True)
     # test_sim(DynamicLimPeakShaveSim, 'Dynamic', lookahead=24, margin=.05, penalize_charging=True, create_log=True)
-    test_sim(EqualizedLimPeakShaveSim, 'Equalized', lookahead=24, penalize_charging=True, create_log=True)
+    # test_sim(EqualizedLimPeakShaveSim, 'Equalized', lookahead=24, penalize_charging=True, create_log=True)
+    test_sim(GreedySim, 'Greedy', verbose=True)
 
     # test_objective(ConstLimPeakShaveSim, margin=.02, penalize_charging=True, create_log=True)
     # test_objective(DynamicLimPeakShaveSim, lookahead=24, margin=.05, penalize_charging=True, create_log=True)
