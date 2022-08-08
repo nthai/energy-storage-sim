@@ -4,7 +4,7 @@ import gym
 import pandas as pd
 from batteries import EnergyHub
 from greedy import GreedySim
-from util import process_file
+from util import calc_above_limit, calc_max_bought, process_file
 from util import compute_limits
 from util import calc_fluctuation
 from util import calc_periodic_fluctuation
@@ -236,7 +236,7 @@ class PeakShaveSim:
             powers.append((datarow['timestamp'], infos['pnet'], infos['pbought'],
                            infos['soc'], lowerlim, upperlim))
             energy_costs += -reward
-        
+
         capex, opex = self._compute_capex_opex()
         total_costs += capex + opex + energy_costs
 
@@ -334,13 +334,15 @@ def objective(SimClass: Type[PeakShaveSim], df: pd.DataFrame, liion_cnt: int,
 
     metrics = {
         'fluctuation': calc_fluctuation(powers),
-        'mean_periodic_fluctuation': calc_periodic_fluctuation(powers)
+        'mean_periodic_fluctuation': calc_periodic_fluctuation(powers),
+        'max_bought': calc_max_bought(powers),
     }
 
     if SimClass is not GreedySim:
         ppsum, ppcount = calc_peak_power_sum(powers)
         metrics['peak_power_sum'] = ppsum
         metrics['peak_power_count'] = ppcount
+        metrics['sum_above_limit'] = calc_above_limit(powers)
 
     return costs, metrics
 
@@ -433,11 +435,11 @@ def main():
     # test_sim(ConstLimPeakShaveSim, 'Const', margin=.02, penalize_charging=True, create_log=True, verbose=True)
     # test_sim(DynamicLimPeakShaveSim, 'Dynamic', lookahead=24, margin=.05, penalize_charging=True, create_log=True)
     # test_sim(EqualizedLimPeakShaveSim, 'Equalized', lookahead=24, penalize_charging=True, create_log=True)
-    test_sim(GreedySim, 'Greedy', verbose=True)
+    # test_sim(GreedySim, 'Greedy', verbose=True)
 
-    # test_objective(ConstLimPeakShaveSim, margin=.02, penalize_charging=True, create_log=True)
-    # test_objective(DynamicLimPeakShaveSim, lookahead=24, margin=.05, penalize_charging=True, create_log=True)
-    # test_objective(EqualizedLimPeakShaveSim, lookahead=24, penalize_charging=True, create_log=True)
+    test_objective(ConstLimPeakShaveSim, margin=.02, penalize_charging=True, create_log=True)
+    test_objective(DynamicLimPeakShaveSim, lookahead=24, margin=.05, penalize_charging=True, create_log=True)
+    test_objective(EqualizedLimPeakShaveSim, lookahead=24, penalize_charging=True, create_log=True)
 
 if __name__ == '__main__':
     main()

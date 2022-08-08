@@ -27,7 +27,7 @@ def print_gene_fitness(liion_cnt, flywh_cnt, sucap_cnt, cost,
 
     for k, v in metrics.items():
         text += f'{k}: '
-        text += f'{v:.2f} '
+        text += f'{v:6.2f} '
 
     print(text)
 
@@ -50,7 +50,9 @@ def fitness_const(sol, _) -> float:
                                sucap_cnt, margin=margin, penalize_charging=True,
                                create_log=False)
 
-    cost = costs['total_costs']
+    # cost = costs['total_costs']
+    # cost = metrics['max_bought']
+    cost = metrics['sum_above_limit']
     # cost = metrics['fluctuation']
     # cost = metrics['peak_power_sum']
     print_gene_fitness(liion_cnt, flywh_cnt, sucap_cnt, cost, metrics, margin)
@@ -83,7 +85,9 @@ def fitness_dyn(sol, _) -> float:
                                sucap_cnt, lookahead=lookahead, margin=margin,
                                penalize_charging=True, create_log=False)
 
-    cost = costs['total_costs']
+    # cost = costs['total_costs']
+    # cost = metrics['max_bought']
+    cost = metrics['sum_above_limit']
     # cost = metrics['fluctuation']
     # cost = metrics['peak_power_sum']
     print_gene_fitness(liion_cnt, flywh_cnt, sucap_cnt, cost, metrics, margin, lookahead)
@@ -108,7 +112,9 @@ def fitness_eq(sol, _) -> float:
     costs, metrics = objective(EqualizedLimPeakShaveSim, DF, liion_cnt, flywh_cnt,
                                sucap_cnt, lookahead=lookahead, penalize_charging=True,
                                create_log=False)
-    cost = costs['total_costs']
+    # cost = costs['total_costs']
+    # cost = metrics['max_bought']
+    cost = metrics['sum_above_limit']
     # cost = metrics['fluctuation']
     # cost = metrics['peak_power_sum']
     print_gene_fitness(liion_cnt, flywh_cnt, sucap_cnt, cost, metrics, lookahead=lookahead)
@@ -131,7 +137,9 @@ def fitness_greedy(sol, _):
     sucap_cnt = sol[2]
 
     costs, metrics = objective(GreedySim, DF, liion_cnt, flywh_cnt, sucap_cnt)
-    cost = costs['total_costs']
+    # cost = costs['total_costs']
+    # cost = metrics['max_bought']
+    cost = metrics['sum_above_limit']
     # cost = metrics['fluctuation']
     # cost = metrics['peak_power_sum']
     print_gene_fitness(liion_cnt, flywh_cnt, sucap_cnt, cost, metrics)

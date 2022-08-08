@@ -19,7 +19,7 @@ python -O genetic_op.py \
     --sol_per_pop 8 \
     --datafile Sub71125.csv \
     --penalize_charging \
-    > logs/fluctopt_const.log &
+    > logs/sumabove_opt_const.log &
 
 python -O genetic_op.py \
     --experiment dyn \
@@ -27,7 +27,7 @@ python -O genetic_op.py \
     --sol_per_pop 8 \
     --datafile Sub71125.csv \
     --penalize_charging \
-    > logs/fluctopt_dynamic.log &
+    > logs/sumabove_opt_dynamic.log &
 
 python -O genetic_op.py \
     --experiment equalize \
@@ -35,12 +35,12 @@ python -O genetic_op.py \
     --sol_per_pop 8 \
     --datafile Sub71125.csv \
     --penalize_charging \
-    > logs/fluctopt_equalized.log &
+    > logs/sumabove_opt_equalized.log &
 
-python -O genetic_op.py \
-    --experiment greedy \
-    --num_generations 20 \
-    --sol_per_pop 8 \
-    --datafile Sub71125.csv \
-    --penalize_charging \
-    > logs/fluctopt_greedy.log &
+# python -O genetic_op.py \
+#     --experiment greedy \
+#     --num_generations 20 \
+#     --sol_per_pop 8 \
+#     --datafile Sub71125.csv \
+#     --penalize_charging \
+#     > logs/fluctopt_greedy.log &

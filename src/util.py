@@ -1,5 +1,6 @@
 import math
 from datetime import datetime
+from operator import itemgetter
 import pandas as pd
 
 def calc_fluctuation(powers: list):
@@ -117,6 +118,27 @@ def sum_above_below(pnets, lower, upper):
         if pnet > upper:
             sumabove += pnet - upper
     return sumbelow, sumabove
+
+def calc_above_limit(powers: list) -> float:
+    '''Computes the amount of power bought above the upper limit.
+    Args:
+        - powers: list of tuples containing power related info. `timestamp`,
+            `pnet`, `pnought`, `soc`, `lowerlimt`, `upperlim`.
+    Returns: the total sum of power above the upper limit.'''
+    total = 0
+    for power in powers:
+        if power[2] > power[5]:
+            total += power[2] - power[5]
+    return total
+
+def calc_max_bought(powers: list) -> float:
+    '''Calculates the maximum buoght power.
+    Args:
+        - powers: list of tuples containing power related info. `timestamp`,
+            `pnet`, `pnought`, `soc`, `lowerlimt`, `upperlim`.
+    Returns: the maximum bought power during the period.'''
+    max_bought = max(powers, key=itemgetter(2))[2]
+    return max_bought
 
 def compute_limits(pnets, tolerance=2, margin=0.25, factor=1):
     '''Compute an upper and lower limit for which the area below the lower limits and

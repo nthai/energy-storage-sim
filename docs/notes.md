@@ -21,6 +21,8 @@
 * Periodic fluctuation: We compute the fluctuation for each day and take the average of it.
 * Sum of peaks above the upper limit. Here we have to be careful with setting the upper limit, as a low sum could also be achieved by setting a very high upper limit.
 * Count of peaks above the upper limit.
+* Sum of bought electricity above the upper limit.
+* Maximum electricity bought.
 
 # Algorithms
 * Constant limits:
@@ -95,3 +97,6 @@
 * After a certain capacity, the number of batteries do not matter anymore. The deciding factor of the performance measures is the margin, the (half-)distance between the upper and the lower limits.
 * The self-discharge rate is an important factor. If we use supercapacitors, our performance measures degrade, because the supercapacitors lose a lot of charge between decisions compared to the Li-Ion battery. Note: this is also cause by the algorithm we implemented, because right now, supercapacitors have higher priority when charging.
 * On this timescale the maximum rate of charge does not matter, as all types of batteries can be charged to full charge in an hour. (This is why we cannot use the benefits of a cupercapacitor to our advantage at the moment.)
+
+# Questions
+* How much energy is lost by using storages?
