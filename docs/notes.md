@@ -58,6 +58,7 @@
 # Results
 
 ## Results with constant limits
+### Minimizing costs
 
 | Li-ion | Flywheel | Supercapacitor | Margin |    Cost   | Fluctuation | Mean fluctuation | Peak sum | Peak count |
 |--------|----------|----------------|--------|-----------|-------------|------------------|----------|------------|
@@ -66,7 +67,10 @@
 |   1    |     0    |        1       | 0.0727 | 226413.79 |   321.79    |       1.49       |  2650.39 |    122     |
 |   1    |     2    |        0       | 0.0810 | 229725.98 |   366.62    |       1.75       |  2447.16 |    112     |
 
+### Minimizing sum of bought power above the upper limit
+
 ## Results with dynamic limits
+### Minimizing costs
 
 | Li-ion | Flywheel | Supercapacitor | Margin |    Cost   | Fluctuation | Mean fluctuation | Peak sum | Peak count |
 |--------|----------|----------------|--------|-----------|-------------|------------------|----------|------------|
@@ -75,7 +79,15 @@
 |   1    |     0    |        3       | 0.1088 | 223111.70 |   282.96    |       1.31       | 1281.14  |    131     |
 |   1    |     1    |        1       | 0.0672 | 222051.81 |   218.78    |       1.02       | 1529.34  |    133     |
 
+### Minimizing sum of bought power above the upper limit
+
+| Li-ion | Flywheel | Supercapacitor | Margin |    Cost   | Fluctuation | Mean fluctuation | Peak sum | Peak count | Peak bought | Sum above limit |
+|--------|----------|----------------|--------|-----------|-------------|------------------|----------|------------|-------------|-----------------|
+|   3    |     3    |        6       | 0.1802 |  22213.59 |   423.30    |       1.39       | 3295.79  |    158     |    113.80   |     22213.59    |
+
+
 ## Results with equalized limits
+### Minimizing costs
 
 | Li-ion | Flywheel | Supercapacitor |    Cost   | Fluctuation | Mean fluctuation | Peak sum | Peak count |
 |--------|----------|----------------|-----------|-------------|------------------|----------|------------|
@@ -83,7 +95,10 @@
 |   0    |     0    |        1       | 213155.99 |    361.29   |       1.70       |   956.76 |    168     |
 |   1    |     1    |        0       | 217192.79 |    337.46   |       1.59       |   299.18 |     69     |
 
+### Minimizing sum of bought power above the upper limit
+
 ## Results with greedy algorithm
+### Minimizing costs
 
 | Li-ion | Flywheel | Supercapacitor |    Cost   | Fluctuation | Mean fluctuation |
 |--------|----------|----------------|-----------|-------------|------------------|

@@ -1,5 +1,5 @@
 import math
-from datetime import datetime
+from datetime import datetime, timedelta
 from operator import itemgetter
 import pandas as pd
 
@@ -90,16 +90,40 @@ def process_file(fname: str) -> pd.DataFrame:
         df = pd.read_csv(fname)
         df['timestamp'] = pd.to_datetime(df['timestamp'], format='%m%d%Y %H:%M')
         df['net'] = df['Load (kWh)'] - df['PV (kWh)']
-    elif 'Sub71125' in fname:
+    elif '71125' in fname: # data from trafo-71125
         df = pd.read_csv(fname, sep=';', decimal=',')
         df['ReadTimestamp'] = pd.to_datetime(df['ReadTimestamp'])
-        df['EntryDateTime'] = pd.to_datetime(df['EntryDateTime'])
+        # df['EntryDateTime'] = pd.to_datetime(df['EntryDateTime'])
         df = df.sort_values('ReadTimestamp', ascending=True).reset_index()
         df['net'] = df['Delta A+[kWh]']
         df['timestamp'] = df['ReadTimestamp']
         # TODO: find proper price data
         df['price (cents/kWh)'] = df['net'] # this is only temporary
     return df
+
+def get_merged_dfs(*fnames: str) -> pd.DataFrame:
+    df_list = []
+    for fname in fnames:
+        df_list.append(process_file(fname))
+
+    df = (pd.concat(df_list)
+          .sort_values('timestamp')
+          .drop_duplicates()
+          .reset_index(drop=True))
+    return df
+
+def missing_datetimes(df: pd.DataFrame):
+    times = df['timestamp']
+    delta = timedelta(hours=1)
+    time = min(times)
+    missing = []
+    for idx, row in df.iterrows():
+        while time < row['timestamp']:
+            missing.append(time)
+            time += delta
+        time += delta
+    for miss in missing:
+        print(miss)
 
 def sum_above_below(pnets, lower, upper):
     '''Calculates the sum of values in the pnets list above the upper limit

@@ -2,7 +2,7 @@ import math
 import argparse
 import pygad
 from greedy import GreedySim
-from util import process_file
+from util import get_merged_dfs, missing_datetimes, process_file
 from peak_shave_sim import objective
 from peak_shave_sim import ConstLimPeakShaveSim
 from peak_shave_sim import DynamicLimPeakShaveSim
@@ -50,9 +50,9 @@ def fitness_const(sol, _) -> float:
                                sucap_cnt, margin=margin, penalize_charging=True,
                                create_log=False)
 
-    # cost = costs['total_costs']
+    cost = costs['total_costs']
     # cost = metrics['max_bought']
-    cost = metrics['sum_above_limit']
+    # cost = metrics['sum_above_limit']
     # cost = metrics['fluctuation']
     # cost = metrics['peak_power_sum']
     print_gene_fitness(liion_cnt, flywh_cnt, sucap_cnt, cost, metrics, margin)
@@ -85,9 +85,9 @@ def fitness_dyn(sol, _) -> float:
                                sucap_cnt, lookahead=lookahead, margin=margin,
                                penalize_charging=True, create_log=False)
 
-    # cost = costs['total_costs']
+    cost = costs['total_costs']
     # cost = metrics['max_bought']
-    cost = metrics['sum_above_limit']
+    # cost = metrics['sum_above_limit']
     # cost = metrics['fluctuation']
     # cost = metrics['peak_power_sum']
     print_gene_fitness(liion_cnt, flywh_cnt, sucap_cnt, cost, metrics, margin, lookahead)
@@ -112,9 +112,9 @@ def fitness_eq(sol, _) -> float:
     costs, metrics = objective(EqualizedLimPeakShaveSim, DF, liion_cnt, flywh_cnt,
                                sucap_cnt, lookahead=lookahead, penalize_charging=True,
                                create_log=False)
-    # cost = costs['total_costs']
+    cost = costs['total_costs']
     # cost = metrics['max_bought']
-    cost = metrics['sum_above_limit']
+    # cost = metrics['sum_above_limit']
     # cost = metrics['fluctuation']
     # cost = metrics['peak_power_sum']
     print_gene_fitness(liion_cnt, flywh_cnt, sucap_cnt, cost, metrics, lookahead=lookahead)
@@ -137,9 +137,9 @@ def fitness_greedy(sol, _):
     sucap_cnt = sol[2]
 
     costs, metrics = objective(GreedySim, DF, liion_cnt, flywh_cnt, sucap_cnt)
-    # cost = costs['total_costs']
+    cost = costs['total_costs']
     # cost = metrics['max_bought']
-    cost = metrics['sum_above_limit']
+    # cost = metrics['sum_above_limit']
     # cost = metrics['fluctuation']
     # cost = metrics['peak_power_sum']
     print_gene_fitness(liion_cnt, flywh_cnt, sucap_cnt, cost, metrics)
@@ -203,10 +203,15 @@ def parse_config() -> dict:
     }
     return configs
 
-def set_global_dataframe(fname: str) -> None:
+def set_global_dataframe(*fnames: str) -> None:
     global DF
-    print(f'Set dataframe from file: {fname}')
-    DF = process_file(fname)
+    if len(fnames) == 1:
+        fname = fnames[0]
+        print(f'Set dataframe from file: {fname}')
+        DF = process_file(fname)
+    else:
+        print(f'Set dataframe from files: {", ".join(fnames)}')
+        DF = get_merged_dfs(*fnames)
 
 def main(configs):
     run_config = configs['run_config']
@@ -239,5 +244,15 @@ def main(configs):
 
 if __name__ == '__main__':
     configs = parse_config()
-    set_global_dataframe('../data/' + configs['run_config']['datafile'])
-    main(configs)
+    fnames = [
+        'Sub71125.csv',
+        'Sub71125_del_1_juni.csv',
+        'Sub71125_16_JUNI_1JULI.csv',
+        'MP71125_1_Juli_31_Juli.csv'
+    ]
+    fnames = ['../data/' + fname for fname in fnames]
+    # set_global_dataframe('../data/' + configs['run_config']['datafile'])
+    set_global_dataframe(*fnames)
+    missing_datetimes(DF)
+
+    # main(configs)
