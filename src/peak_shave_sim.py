@@ -401,24 +401,28 @@ def test_sim(SimClass: Type[PeakShaveSim], run_type: str, **sim_run_config):
     metrics = {
         'fluctuation': calc_fluctuation(powers),
         'mean_periodic_fluctuation': calc_periodic_fluctuation(powers),
+        'max_bought': calc_max_bought(powers),
+        'peak_power_sum': None,
+        'peak_power_count': None,
+        'sum_above_limit': None,
     }
     if run_type != 'Greedy':
         ppsum, ppcount = calc_peak_power_sum(powers)
         metrics['peak_power_sum'] = ppsum
         metrics['peak_power_count'] = ppcount
-    else:
-        metrics['peak_power_sum'] = None
-        metrics['peak_power_count'] = None
+        metrics['sum_above_limit'] = calc_above_limit(powers)
     
     print()
     print(f'{run_type} run energy costs: {costs["energy_costs"]:.2f} ' +
           f'capex: {costs["capex"]:.2f} opex: {costs["opex"]:.2f} ' +
           f'total costs: {costs["total_costs"]:.2f}')
     outstr = (f'Fluctuation: {metrics["fluctuation"]:.2f} ' +
-              f'Mean periodic fluctuation: {metrics["mean_periodic_fluctuation"]:.2f} ')
+              f'Mean periodic fluctuation: {metrics["mean_periodic_fluctuation"]:.2f} ' +
+              f'Max bought: {metrics["max_bought"]:.2f} ')
     if run_type != 'Greedy':
         outstr += (f'Peak above upper limit sum: {metrics["peak_power_sum"]:.2f} ' +
-                   f'count: {metrics["peak_power_count"]}')
+                   f'Count: {metrics["peak_power_count"]} ' +
+                   f'Sum above limit: {metrics["sum_above_limit"]:.2f}')
     print(outstr)
 
 def test_objective(SimClass: Type[PeakShaveSim], **run_config):
@@ -432,14 +436,14 @@ def test_objective(SimClass: Type[PeakShaveSim], **run_config):
     print()
 
 def main():
-    # test_sim(ConstLimPeakShaveSim, 'Const', margin=.02, penalize_charging=True, create_log=True, verbose=True)
-    # test_sim(DynamicLimPeakShaveSim, 'Dynamic', lookahead=24, margin=.05, penalize_charging=True, create_log=True)
-    # test_sim(EqualizedLimPeakShaveSim, 'Equalized', lookahead=24, penalize_charging=True, create_log=True)
-    # test_sim(GreedySim, 'Greedy', verbose=True)
+    test_sim(ConstLimPeakShaveSim, 'Const', margin=.02, penalize_charging=True, create_log=True, verbose=True)
+    test_sim(DynamicLimPeakShaveSim, 'Dynamic', lookahead=24, margin=.05, penalize_charging=True, create_log=True)
+    test_sim(EqualizedLimPeakShaveSim, 'Equalized', lookahead=24, penalize_charging=True, create_log=True)
+    test_sim(GreedySim, 'Greedy', verbose=True)
 
-    test_objective(ConstLimPeakShaveSim, margin=.02, penalize_charging=True, create_log=True)
-    test_objective(DynamicLimPeakShaveSim, lookahead=24, margin=.05, penalize_charging=True, create_log=True)
-    test_objective(EqualizedLimPeakShaveSim, lookahead=24, penalize_charging=True, create_log=True)
+    # test_objective(ConstLimPeakShaveSim, margin=.02, penalize_charging=True, create_log=True)
+    # test_objective(DynamicLimPeakShaveSim, lookahead=24, margin=.05, penalize_charging=True, create_log=True)
+    # test_objective(EqualizedLimPeakShaveSim, lookahead=24, penalize_charging=True, create_log=True)
 
 if __name__ == '__main__':
     main()

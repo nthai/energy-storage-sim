@@ -50,11 +50,11 @@ def fitness_const(sol, _) -> float:
                                sucap_cnt, margin=margin, penalize_charging=True,
                                create_log=False)
 
-    cost = costs['total_costs']
+    # cost = costs['total_costs']
     # cost = metrics['max_bought']
     # cost = metrics['sum_above_limit']
     # cost = metrics['fluctuation']
-    # cost = metrics['peak_power_sum']
+    cost = metrics['peak_power_sum']
     print_gene_fitness(liion_cnt, flywh_cnt, sucap_cnt, cost, metrics, margin)
 
     try:
@@ -85,11 +85,11 @@ def fitness_dyn(sol, _) -> float:
                                sucap_cnt, lookahead=lookahead, margin=margin,
                                penalize_charging=True, create_log=False)
 
-    cost = costs['total_costs']
+    # cost = costs['total_costs']
     # cost = metrics['max_bought']
     # cost = metrics['sum_above_limit']
     # cost = metrics['fluctuation']
-    # cost = metrics['peak_power_sum']
+    cost = metrics['peak_power_sum']
     print_gene_fitness(liion_cnt, flywh_cnt, sucap_cnt, cost, metrics, margin, lookahead)
     return 100000/cost
 
@@ -112,11 +112,11 @@ def fitness_eq(sol, _) -> float:
     costs, metrics = objective(EqualizedLimPeakShaveSim, DF, liion_cnt, flywh_cnt,
                                sucap_cnt, lookahead=lookahead, penalize_charging=True,
                                create_log=False)
-    cost = costs['total_costs']
+    # cost = costs['total_costs']
     # cost = metrics['max_bought']
     # cost = metrics['sum_above_limit']
     # cost = metrics['fluctuation']
-    # cost = metrics['peak_power_sum']
+    cost = metrics['peak_power_sum']
     print_gene_fitness(liion_cnt, flywh_cnt, sucap_cnt, cost, metrics, lookahead=lookahead)
     if cost == 0:
         return float('inf')
@@ -137,11 +137,11 @@ def fitness_greedy(sol, _):
     sucap_cnt = sol[2]
 
     costs, metrics = objective(GreedySim, DF, liion_cnt, flywh_cnt, sucap_cnt)
-    cost = costs['total_costs']
+    # cost = costs['total_costs']
     # cost = metrics['max_bought']
     # cost = metrics['sum_above_limit']
     # cost = metrics['fluctuation']
-    # cost = metrics['peak_power_sum']
+    cost = metrics['peak_power_sum']
     print_gene_fitness(liion_cnt, flywh_cnt, sucap_cnt, cost, metrics)
     return 100000/cost
 
@@ -251,8 +251,8 @@ if __name__ == '__main__':
         'MP71125_1_Juli_31_Juli.csv'
     ]
     fnames = ['../data/' + fname for fname in fnames]
-    # set_global_dataframe('../data/' + configs['run_config']['datafile'])
-    set_global_dataframe(*fnames)
-    missing_datetimes(DF)
+    set_global_dataframe('../data/' + configs['run_config']['datafile'])
+    # set_global_dataframe(*fnames)
+    # missing_datetimes(DF)
 
-    # main(configs)
+    main(configs)
