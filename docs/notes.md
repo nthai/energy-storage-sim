@@ -59,6 +59,8 @@
 
 ## Results with constant limits
 
+In these cases the upper and lower limits are set using the median of the whole dataset and the distance of the upper and lower limit from the median depends on the margin. If we look at the figures above (for the constant limits) we see that the battery SOC  is very low, which means that they rarely get charged. The result is that we use very few batteries, in most cases, one battery with 100 kWh capacity is enough. Many of the results in the tables below look the same because all these results at one battery, and additionally batteries do not influence these results.
+
 ### Minimizing the sum of peaks above the upper limit
 
 | LiIon | Flywheel | Supercapacitor | Margin | Fitness | Cost | fluctuation | mean_periodic_fluctuation | max_bought | peak_power_sum | peak_power_count | sum_above_limit |
@@ -177,6 +179,8 @@
 
 
 ## Results with equalized limits
+
+Similar to the case of constant limits, many results are similar, because we never need more than one battery and additional batteries will not change the behavior of the system and the results.
 
 ### Minimizing the sum above the upper limit
 
