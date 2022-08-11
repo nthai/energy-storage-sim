@@ -57,6 +57,27 @@
 
 # Results
 
+## Baseline
+Baseline was run with zero batteries, that is, we always buy as much electricity from the grid as the current demand is.
+* Total cost: 209902.85
+* Fluctuation: 464.47
+* Mean periodic fluctuation: 2.20
+* Max bought power:
+  * Greedy algo.: 129.50 kWh
+  * Other algo.: 113.80 kWh
+* Peak above upper limit:
+  * Const: 3941.66 kWh
+  * Dynamic: 3419.47 kWh
+  * Equalized: 1813.24 kWh
+* Peak count:
+  * Const: 204
+  * Dynamic: 234
+  * Equalized: 227
+* Power sum above limit:
+  * Const: 27509.92 kWh
+  * Dynamic: 12004.79 kWh
+  * Equalized: 3495.11 kWh
+
 ## Results with constant limits
 
 In these cases the upper and lower limits are set using the median of the whole dataset and the distance of the upper and lower limit from the median depends on the margin. If we look at the figures above (for the constant limits) we see that the battery SOC  is very low, which means that they rarely get charged. The result is that we use very few batteries, in most cases, one battery with 100 kWh capacity is enough. Many of the results in the tables below look the same because all these results at one battery, and additionally batteries do not influence these results.
