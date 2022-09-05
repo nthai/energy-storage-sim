@@ -1,0 +1,32 @@
+batteries.py: loading battery config from /home/nthai/codes/github/ml/energy-storage-sim/src/batteries.yaml...
+batteries.py: Loading config for LiIonBattery...
+batteries.py: Loading config for Flywheel...
+batteries.py: Loading config for Supercapacitor...
+batteries.py: EnergyHub initialized with config: {'delta_limit': 1, 'LiIonBattery': 3, 'Flywheel': 3, 'Supercapacitor': 3}
+{'energy_costs': 220783.83162295484, 'capex': 33865.07705479452, 'opex': 1231.9352739726025, 'total_costs': 255880.84395172197}
+{'fluctuation': 204.4071978588541, 'mean_periodic_fluctuation': 0.892183969090221, 'max_bought': 113.8, 'peak_power_sum': 3071.6352783178027, 'peak_power_count': 126, 'sum_above_limit': -23402.457761931197}
+
+batteries.py: EnergyHub initialized with config: {'delta_limit': 1, 'LiIonBattery': 3, 'Flywheel': 3, 'Supercapacitor': 3}
+{'energy_costs': 210461.98416745945, 'capex': 33865.07705479452, 'opex': 1231.9352739726025, 'total_costs': 245558.99649622658}
+{'fluctuation': 192.03726045091176, 'mean_periodic_fluctuation': 0.8944948185708085, 'max_bought': 108.4031190824821, 'peak_power_sum': 1684.0976826176984, 'peak_power_count': 137, 'sum_above_limit': -4779.059894917442}
+
+batteries.py: EnergyHub initialized with config: {'delta_limit': 1, 'LiIonBattery': 3, 'Flywheel': 3, 'Supercapacitor': 3}
+{'energy_costs': 209811.82992330389, 'capex': 33865.07705479452, 'opex': 1231.9352739726025, 'total_costs': 244908.84225207102}
+{'fluctuation': 361.2946706071136, 'mean_periodic_fluctuation': 1.7014941155863708, 'max_bought': 110.36157376982665, 'peak_power_sum': 956.7603069579826, 'peak_power_count': 168, 'sum_above_limit': -1581.9170414938758}
+
+batteries.py: loading battery config from /home/nthai/codes/github/ml/energy-storage-sim/src/batteries.yaml...
+batteries.py: Loading config for LiIonBattery...
+batteries.py: Loading config for Flywheel...
+batteries.py: Loading config for Supercapacitor...
+batteries.py: EnergyHub initialized with config: {'delta_limit': 1, 'LiIonBattery': 3, 'Flywheel': 3, 'Supercapacitor': 3}
+{'energy_costs': 220783.83162295484, 'capex': 33865.07705479452, 'opex': 1231.9352739726025, 'total_costs': 255880.84395172197}
+{'fluctuation': 204.4071978588541, 'mean_periodic_fluctuation': 0.892183969090221, 'max_bought': 113.8, 'peak_power_sum': 3071.6352783178027, 'peak_power_count': 126, 'sum_above_limit': 23402.457761931197}
+
+batteries.py: EnergyHub initialized with config: {'delta_limit': 1, 'LiIonBattery': 3, 'Flywheel': 3, 'Supercapacitor': 3}
+{'energy_costs': 210461.98416745945, 'capex': 33865.07705479452, 'opex': 1231.9352739726025, 'total_costs': 245558.99649622658}
+{'fluctuation': 192.03726045091176, 'mean_periodic_fluctuation': 0.8944948185708085, 'max_bought': 108.4031190824821, 'peak_power_sum': 1684.0976826176984, 'peak_power_count': 137, 'sum_above_limit': 4779.059894917442}
+
+batteries.py: EnergyHub initialized with config: {'delta_limit': 1, 'LiIonBattery': 3, 'Flywheel': 3, 'Supercapacitor': 3}
+{'energy_costs': 209811.82992330389, 'capex': 33865.07705479452, 'opex': 1231.9352739726025, 'total_costs': 244908.84225207102}
+{'fluctuation': 361.2946706071136, 'mean_periodic_fluctuation': 1.7014941155863708, 'max_bought': 110.36157376982665, 'peak_power_sum': 956.7603069579826, 'peak_power_count': 168, 'sum_above_limit': 1581.9170414938758}
+
