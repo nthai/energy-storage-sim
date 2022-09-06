@@ -18,5 +18,25 @@ We want to operate transformers close to 100% to minimize relative loss.
 ## State space
 
 State space should include the following:
+* timestamp
 * state of charge (of each battery type, if we can charge them separately)
 * net load in the previous timesteps
+* in previous simulations it also contained the power produced by solar cells and the price of the electricity
+
+## Frameworks
+### stable baselines3
+
+We must implement the gym interface. This means the following functions:
+* `__init__(self)`: return None
+* `reset(self)`: must return an observation as a numpy array
+* `step(self, action)`: must return a tuple (observation, reward, done, info)
+* `render(self, mode)`: not necessary
+* `close(self)` not necessary
+
+### rllib (ray)
+
+A gym interface has to be implemented here too. Action mask can be implemented by overriding the algorithm and the policy itself (e.g.: https://github.com/ray-project/ray/blob/master/rllib/examples/random_parametric_agent.py or https://docs.ray.io/en/latest/rllib/rllib-models.html#variable-length-parametric-action-spaces)
+
+## Other notes
+
+Run with `python -m src.control.ehub_env` from the `src` directory.
