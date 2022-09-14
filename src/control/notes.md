@@ -6,7 +6,7 @@
 3. What should be the objective/reward?
 
 ### Action Space
-$\Delta SOC$, the amount of value we want to charge/discharge the batteries with. In case of charge, we buy ectra power from the grid. In case of discharge, we use the power from the battery. If we charge or discharge too much, the energy will got to waste.
+$`\Delta SOC`$, the amount of value we want to charge/discharge the batteries with. In case of charge, we buy ectra power from the grid. In case of discharge, we use the power from the battery. If we charge or discharge too much, the energy will got to waste.
 
 For later: it could be possible to decide which type of storage we would want to charge. E.g. a `(-.2, .5, .2)` action would mean that we discharge the Li-ion storage with 20 kW, and charge a flywheel and a supercapacitor with 50 kW and 20 kW respectively.
 
@@ -15,13 +15,33 @@ For later: it could be possible to decide which type of storage we would want to
 We want to operate transformers close to 100% to minimize relative loss.
 * Idea: try to operate the transformer close to 90%. The cost signal should represent how far we are from the 90%. If the power at the transformer (the power we take from the grid) exceeds the 100%, the cost should be even higher.
 
-## State space
+* Given a current load (`trafo_load`) and a nominal power (`trafo_nompower`), what should be used for distance metrics?
+
+* The current reward used is
+```math
+r(t) = \begin{cases}
+-(p(t) - pnom)^2 & \text{if $p(t) \leq pmax$} \\
+-(p(t) - pnom)^2 - (pmax - p(t))^2 & \text{if $p(t) > pmax$}
+\end{cases}
+```
+where $`p(t)`$ is the current load on the trafo, $`pnom`$ is the nominal power of the trafo (set to 90 kW by default), and $`pmax`$ is the maximum power of the trafo (set to 100 kW by default).
+
+### State space
 
 State space should include the following:
 * timestamp
 * state of charge (of each battery type, if we can charge them separately)
 * net load in the previous timesteps
 * in previous simulations it also contained the power produced by solar cells and the price of the electricity
+
+### The `step()` function
+
+Let $`a(t)`$ be the action taken at time $`t`$. At the $`t`$th timestep, the net load measurement provides information for the period in $`[t-1, t]`$. To calculate the reward for this timestep, that is, $`r(t)`$, we have to look at the action taken in the previous timestep, $`a(t-1)`$.
+
+1. Look at action $`a(t-1)`$ and compute $`SOC(t)`$, the state-of-charge at time $`t`$.
+2. In case of charging, add the power bought to the net load. In case of discharging, subtract the gained power from the net load. Note, that these powers do not equal the $`\Delta SOC`$, becuase the charging and discharging efficiencies are not 100%.
+3. The computed power tells us how much power goes through the trafo. Compute the distance of the power from the trafo's nominal power.
+4. $`r(t)`$ depends on the distance from the nominal power. If the power is closer to the nominal power, the reward should also be higher. However, if we exceed the maximum power of the trafe, we shuold punish the agent harshly.
 
 ## Frameworks
 ### stable baselines3
