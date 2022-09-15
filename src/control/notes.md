@@ -18,12 +18,14 @@ We want to operate transformers close to 100% to minimize relative loss.
 * Given a current load (`trafo_load`) and a nominal power (`trafo_nompower`), what should be used for distance metrics?
 
 * The current reward used is
+
 $$
 r(t) = \begin{cases}
 -(p(t) - p_\text{nom})^2 & \text{if $p(t) \leq p_\text{max}$} \\
 -(p(t) - p_\text{nom})^2 - (p_\text{max} - p(t))^2 & \text{if $p(t) > p_\text{max}$}
 \end{cases}
 $$
+
 where $p(t)$ is the current load on the trafo, $p_\text{nom}$ is the nominal power of the trafo (set to 90 kW by default), and $p_\text{max}$ is the maximum power of the trafo (set to 100 kW by default).
 
 ### State space
