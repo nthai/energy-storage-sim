@@ -27,6 +27,7 @@ class EhubEnv(gym.Env):
         self.ehub = EnergyHub(config['ehub_config'])
         self.trafo_maxpower = config['trafo_max_power']
         self.trafo_nompower = config['trafo_nominal_power']
+        self.eval_mode = config['eval_mode']
     
     def reset(self):
         self.soc = 0 # state of charge
@@ -63,7 +64,12 @@ class EhubEnv(gym.Env):
             'total_selfdischarge': tselfdis,
             'total_penalty': tpen,
             'pdemand': pdemand,
+            'deltasoc': deltasoc,
+            'trafoload': trafo_load,
         }
+
+        if self.eval_mode:
+            info['soc'] = self.ehub.get_soc()
 
         reward = self._get_reward(trafo_load)
 
